@@ -1,4 +1,4 @@
-# halo-public-skills
+# Halodoc Skills
 
 
 Inital Commit
