@@ -164,7 +164,7 @@ We are proud to be trusted by global and regional investors including the Bill &
 
 Our engineering teams have been embedding AI into their daily workflows to keep pace with that mission. This repository is part of that journey made public — tools we built for ourselves that we think can help others too.
 
-Engineering blog → [engineering.halodoc.com](https://engineering.halodoc.com)  
+Engineering blog → [blogs.halodoc.io](https://blogs.halodoc.io/)  
 LinkedIn → [linkedin.com/company/halodoc](https://www.linkedin.com/company/halodoc)
 
 ---
