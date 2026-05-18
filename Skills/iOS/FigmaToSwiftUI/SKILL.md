@@ -1,11 +1,17 @@
 ---
 name: figma-to-swiftui
-description: Convert a Figma design into SwiftUI View + ViewModel files following your project's design system conventions, design tokens, and localisation rules. Use when asked to implement or generate a screen from a Figma URL.
+description: >
+  Figma to SwiftUI — converts a Figma screen into SwiftUI View + ViewModel files mapped
+  to your project's design system components, tokens, and localisation conventions.
+  Handles component resolution, DS variant gap detection, image and animation prompting,
+  localisation key generation, and SwiftLint compliance before writing a single line of code.
+  Use this skill when a user says "convert this Figma to SwiftUI", "build this screen in SwiftUI",
+  "implement this design", "generate UI from Figma", "write the SwiftUI for this screen",
+  "turn this Figma frame into code", or provides a Figma URL and asks to generate or implement
+  a screen, view, or UI component.
 ---
 
 # Figma → SwiftUI
-
-Arguments: $ARGUMENTS
 
 > Before executing this skill, read `references/DS_AGENTS.md`.
 > It is the authoritative source for component catalogue, token conventions,
@@ -42,7 +48,7 @@ To generate the screen I need a couple of details:
 
 ## Figma MCP
 
-Use the remote endpoint. If it fails, stop and report — do not proceed.
+Use the remote endpoint. If it fails, stop and report using the diagnostic table below — do not proceed.
 
 | | Endpoint |
 |---|---|
@@ -50,14 +56,73 @@ Use the remote endpoint. If it fails, stop and report — do not proceed.
 
 Always scope calls to the specific node ID. Never fetch a root frame or full page.
 
+**Error diagnostics:**
+
+| Error | Symptom | Message to show |
+|---|---|---|
+| MCP not configured | "tool not available" | ❌ Figma MCP not connected. Add it in Claude Code Settings → MCP: `https://mcp.figma.com/mcp` |
+| Auth / access denied | 403 or "no access" | ❌ No access to this Figma file. Ensure your Figma account has view permission. |
+| Network error | timeout or unreachable | ❌ Figma MCP unreachable. Check your network connection and retry. |
+
+---
+
+## Pre-flight — Project Setup Check
+
+Before fetching any Figma data, verify the two required project files exist.
+
+**1. Design system reference (blocking):**
+
+```bash
+find . -path "*/FigmaToSwiftUI/references/DS_AGENTS.md" 2>/dev/null | head -1
+```
+
+If not found, stop and print:
+
+```
+❌ Setup required: references/DS_AGENTS.md not found.
+
+This file documents your design system components, token namespace, and
+localisation paths. The skill cannot map Figma components without it.
+
+Next steps:
+  1. Open the DS_AGENTS.md template from the skill's references/ folder
+  2. Fill in your Component Catalogue, Token Conventions, and Localisation Paths
+  3. Re-run the skill
+
+See README.md → Setup for the full guide.
+```
+
+**2. Architecture reference (non-blocking):**
+
+```bash
+find . -maxdepth 3 -name "CLAUDE.md" 2>/dev/null | head -1
+```
+
+If not found, print a warning and continue:
+
+```
+⚠️  No CLAUDE.md found. Localisation key generation (Step 6b) will ask for
+    the correct path rather than looking it up automatically.
+```
+
 ---
 
 ## Execution Protocol
 
-> **SwiftLint constraint (enforced throughout):** Every file generated must pass
-> `swiftlint lint --path <target_path>` with zero violations. Apply this as a
-> generation constraint — check output against SwiftLint rules before presenting it.
-> Do not defer linting to a separate verification step.
+> **SwiftLint — generation rules (applied while writing code):**
+> - Keep lines under 120 characters (`line_length`)
+> - No trailing whitespace (`trailing_whitespace`)
+> - Colon spacing: `let x: Type`, not `let x : Type` (`colon_spacing`)
+> - Return arrow spacing: `-> ReturnType`, not `->ReturnType` (`return_arrow_whitespace`)
+> - Use `private` access control for internal properties and helpers
+> - No force-unwrap (`!`) or force-cast (`as!`) in generated code
+>
+> **SwiftLint — post-generation verification (run after files are written):**
+> ```bash
+> swiftlint lint --path <target_path>
+> ```
+> Fix all violations before presenting final output.
+> If SwiftLint is not installed: ⚠️ `brew install swiftlint`, then run manually.
 
 ### Step 1 — Fetch design context
 
@@ -224,6 +289,21 @@ Replace `<YourTokenNamespace>` with your project's token type — see `reference
 
 Only after Step 4 confirmation.
 
+**Before writing, check if either file already exists:**
+
+```bash
+ls <target_path>/<ScreenName>View.swift <target_path>/<ScreenName>ViewModel.swift 2>/dev/null
+```
+
+If either exists, ask:
+
+```
+⚠️  <ScreenName>View.swift already exists at <target_path>.
+    Replace it? [y] Yes  [n] No  [d] Show diff first
+```
+
+Only proceed on explicit `y`.
+
 Produce two files per screen — follow naming and structure from `references/DS_AGENTS.md`:
 
 - `<ScreenName>View.swift` — layout only, zero business logic
@@ -235,9 +315,22 @@ Token rules are in `references/DS_AGENTS.md` (Design Token Conventions). All rul
 
 For every user-facing string in the generated view:
 
-1. Look up the target module in the **Localisation table in your project's root `CLAUDE.md`**.
-2. If the module is listed, add the key + primary-language value and secondary-language value to their respective `Localizable.strings` files at the documented paths.
-3. If the module is **not listed**, stop and ask the developer for the correct localisation path before writing any keys.
+1. Check for `CLAUDE.md`:
+   ```bash
+   find . -maxdepth 3 -name "CLAUDE.md" 2>/dev/null | head -1
+   ```
+   If not found, ask:
+   ```
+   No CLAUDE.md found. What is the localisation file path for '<target_module>'?
+   (e.g. Modules/FeatureA/Sources/Resources/en.lproj/Localizable.strings)
+   ```
+   Do not write any keys until the path is confirmed.
+
+2. If `CLAUDE.md` is found, look up the target module in its **Localisation table**.
+   If the module is not listed, ask for the path as above.
+
+3. Add the key + primary-language value and secondary-language value to their respective `Localizable.strings` files.
+
 4. Use `.localized` (or your project's equivalent extension) in code — never hardcode raw strings in the view:
 
 ```swift
@@ -245,6 +338,29 @@ Text("feature_title_label".localized)
 ```
 
 Key naming: `snake_case`, descriptive of the UI element (e.g. `onboarding_start_button`, `empty_state_message`).
+
+---
+
+### Step 7 — Print completion summary
+
+After all files are written, print:
+
+```
+✅ Screen generated successfully.
+
+Files written:
+  • <target_path>/<ScreenName>View.swift
+  • <target_path>/<ScreenName>ViewModel.swift
+
+Localisation keys added:
+  • <count> key(s) added to <localisation_file_path>
+    (or: "No user-facing strings — no localisation keys added")
+
+Next steps:
+  1. Run SwiftLint:  swiftlint lint --path <target_path>
+  2. Wire the ViewModel into your DI container (see CLAUDE.md)
+  3. Register navigation route if needed (see CLAUDE.md)
+```
 
 ---
 
