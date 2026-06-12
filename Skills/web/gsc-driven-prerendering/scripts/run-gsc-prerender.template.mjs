@@ -110,11 +110,11 @@ async function getSearchConsoleClient() {
   return google.searchconsole({ version: 'v1', auth: authClient });
 }
 
-/** Returns GSC query date range: last 30 days to today, as YYYY-MM-DD. */
+/** Returns GSC query date range: last 7 days to today, as YYYY-MM-DD. */
 function getDateRange() {
   const end = new Date();
   const start = new Date();
-  start.setMonth(start.getMonth() - 1);
+  start.setDate(start.getDate() - 7);
   return {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10),

@@ -166,9 +166,9 @@ GSC_KEY_DIR=/path/to/key/dir npm run gsc-prerender
 
 The script logs the output path and the JSON it wrote. Sanity-check the JSON (see "Sanity-checking" in [path-query-recipe.md](references/path-query-recipe.md)). Commit the generated `gsc-prerender-params.constant.ts` so builds without GSC access still work — the script regenerates it on the schedule.
 
-> **New site or path with no recent traffic?** The script always queries the last 30 days. If the
+> **New site or path with no recent traffic?** The script always queries the last 7 days. If the
 > site launched recently or a path has no clicks in that window, the output will be an empty array
-> — this is expected. Wait until you have 30+ days of GSC data, or manually seed the constants
+> — this is expected. Wait until you have at least 7 days of GSC data, or manually seed the constants
 > file with known slugs for the initial commit.
 
 ### 2.9 Hand off
@@ -236,7 +236,7 @@ GSC_KEY_DIR=/path/to/key/dir npm run gsc-prerender
 Open the regenerated `gsc-prerender-params.constant.ts` and check the new key is present, populated, and the values look right. If the list is empty:
 
 - Spot-check the regex against actual URLs in GSC's "Performance" report.
-- Confirm the GSC property has traffic on those URLs in the last 30 days.
+- Confirm the GSC property has traffic on those URLs in the last 7 days.
 - Confirm `prefix` matches the actual pathname.
 
 ### 3.6 Commit all four files together
