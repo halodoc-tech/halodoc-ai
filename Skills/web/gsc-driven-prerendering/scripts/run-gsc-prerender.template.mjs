@@ -34,7 +34,15 @@ const OUTPUT_FILE = join(projectRoot, 'src', 'app', 'prerender-routes', 'gsc-pre
 const ROW_LIMIT_PER_PATH = 10000;
 
 const GSC_KEY_DIR = process.env.GSC_KEY_DIR; // CI provides this; export it for local runs.
-const GSC_KEY_FILE = join(GSC_KEY_DIR ?? '', 'gsc-service-account.json');
+if (!GSC_KEY_DIR) {
+  console.error(
+    'Error: GSC_KEY_DIR environment variable is not set.\n' +
+    'Export it before running: export GSC_KEY_DIR=/path/to/dir-containing/gsc-service-account.json\n' +
+    'See references/service-account-setup.md for full setup instructions.'
+  );
+  process.exit(1);
+}
+const GSC_KEY_FILE = join(GSC_KEY_DIR, 'gsc-service-account.json');
 
 // 3. Per-path click budget. Increase carefully — each prerendered route adds
 //    headless-browser time to the build.
@@ -64,6 +72,14 @@ const PATH_QUERIES = [
 ];
 
 async function main() {
+  if (PATH_QUERIES.length === 0) {
+    console.warn(
+      'Warning: PATH_QUERIES is empty — no routes configured yet.\n' +
+      'Add at least one entry before running. See references/path-query-recipe.md.'
+    );
+    process.exit(0);
+  }
+
   let searchconsole;
   try {
     searchconsole = await getSearchConsoleClient();

@@ -83,6 +83,9 @@ import('googleapis').then(async ({ google }) => {
 
 You should see your verified properties listed. If the property you need is missing, the service account hasn't been added in Search Console (Step 3).
 
+> If your project uses `"type": "commonjs"` in `package.json`, add `--input-type=module`:
+> `node --input-type=module -e "import('googleapis').then(...)"`
+
 ---
 
 ## Common errors

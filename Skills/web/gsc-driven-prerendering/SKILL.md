@@ -1,12 +1,29 @@
 ---
 name: gsc-driven-prerendering
+version: "1.0.0"
+maintainer: "halodoc-ai"
 description: >
-  Set up or extend Google Search Console-driven prerendering for an Angular SSR app — generate a typed click-ranked params list and wire it into ServerRoute getPrerenderParams. Triggers on: "set up GSC prerender", "configure prerendering from Search Console", "add prerender route from clicks", "click-based prerendering", "automate Angular prerender with GSC", "GSC prerender skill".
+  Angular 17+ / @angular/ssr: Set up or extend Google Search Console-driven prerendering — generate
+  a typed click-ranked params list and wire it into ServerRoute getPrerenderParams. Triggers on:
+  "prerender Angular routes from SEO traffic", "set up GSC prerender", "configure prerendering from
+  Search Console", "add prerender route from clicks", "click-based prerendering",
+  "automate Angular prerender with GSC", "GSC prerender skill",
+  "prerender most visited Angular pages", "use search traffic to pick prerender routes",
+  "rank prerender routes by SEO clicks", "getPrerenderParams from analytics".
+when_to_use: >
+  Use when the user wants to drive Angular SSR prerendering from real search traffic or SEO data —
+  e.g. "prerender the most visited pages", "use Google Search Console to pick routes to prerender",
+  "replace hardcoded prerender params with real traffic data", "set up GSC-driven Angular prerender",
+  "automate prerender route list from analytics", "rank Angular SSR routes by SEO clicks".
+  Requires Angular 17+ with @angular/ssr and RenderMode.Prerender.
 ---
 
 # GSC-Driven Prerendering
 
 This skill helps you replace hardcoded prerender route lists with one driven by real Google Search Console click data.
+
+> **Prerequisites:** Angular 17+ with `@angular/ssr` installed and `RenderMode.Prerender` in use.
+> If your app uses `@nguniversal` or an older Angular SSR approach, this skill does not apply.
 
 The pattern:
 
@@ -55,14 +72,21 @@ npm install googleapis
 # or: pnpm add googleapis / yarn add googleapis
 ```
 
+> **Requires Node.js 18+** (or Node 14.8+ with `--experimental-vm-modules`). Confirm with `node --version`.
+
 The script uses `google.searchconsole({ version: 'v1' })`. No other runtime deps are needed.
 
 ### 2.3 Drop in the runner script
 
-Copy the template from this skill into the project at `scripts/run-gsc-prerender.mjs`:
+The template script is bundled at `scripts/run-gsc-prerender.template.mjs` in this skill.
 
 ```bash
+# If using Claude Code (skill is installed locally):
 cp <skill-dir>/scripts/run-gsc-prerender.template.mjs scripts/run-gsc-prerender.mjs
+
+# If setting up manually: copy the full contents of
+# scripts/run-gsc-prerender.template.mjs from this skill's repository
+# into scripts/run-gsc-prerender.mjs in your project.
 ```
 
 Then edit the four marked sections in the script:
@@ -141,6 +165,11 @@ GSC_KEY_DIR=/path/to/key/dir npm run gsc-prerender
 ```
 
 The script logs the output path and the JSON it wrote. Sanity-check the JSON (see "Sanity-checking" in [path-query-recipe.md](references/path-query-recipe.md)). Commit the generated `gsc-prerender-params.constant.ts` so builds without GSC access still work — the script regenerates it on the schedule.
+
+> **New site or path with no recent traffic?** The script always queries the last 30 days. If the
+> site launched recently or a path has no clicks in that window, the output will be an empty array
+> — this is expected. Wait until you have 30+ days of GSC data, or manually seed the constants
+> file with known slugs for the initial commit.
 
 ### 2.9 Hand off
 
