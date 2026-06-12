@@ -56,7 +56,7 @@ Each prerendered page is one headless-browser render at build time. Cost grows l
 - Start at **10** for a new path. Watch the build duration delta after the first run.
 - Bump to 25–50 once the path is proven and the build budget allows.
 - Hot, short-lived content (news, seasonal articles) can justify a higher limit because the click distribution has a long tail.
-- Stable evergreen content can go lower because the same pages repeat month over month.
+- Stable evergreen content can go lower — the same top pages tend to appear consistently across weekly query windows, so a low limit still captures your most important routes.
 
 The script de-duplicates within a path, so `limit` is the count of **unique** params after sort.
 
@@ -91,3 +91,5 @@ For each new path, confirm:
 - The count is `≤ limit`.
 
 If any of those fail, tighten the regex or add a `filterRow` rather than post-processing in the script writer — keep the data flow simple.
+
+- Confirm the GSC property has traffic on those URLs within the last 7 days. Open GSC → Performance → filter by URL to verify. Note that GSC has a 2–3 day processing lag, so very recent traffic may not appear yet.
