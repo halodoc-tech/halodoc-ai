@@ -23,6 +23,7 @@ when_to_use: >
 This skill helps you replace hardcoded prerender route lists with one driven by real Google Search Console click data.
 
 > **Prerequisites:** Angular 17+ with `@angular/ssr` installed and `RenderMode.Prerender` in use.
+> **Node.js 18+** required (`node --version` to confirm — 14.8+ works only with `--experimental-vm-modules`).
 > If your app uses `@nguniversal` or an older Angular SSR approach, this skill does not apply.
 
 The pattern:
@@ -54,6 +55,16 @@ Both empty → Bootstrap. Either non-empty → Extend.
 
 ## Step 2: Bootstrap (first-time setup)
 
+Bootstrap creates or modifies exactly these files:
+
+| File | Action |
+|---|---|
+| `scripts/run-gsc-prerender.mjs` | Created from template — edit the four marked sections |
+| `package.json` | Modified — add `gsc-prerender` script |
+| `src/app/utils/gsc-prerender-params.ts` | Created — typed `GscPrerenderParams` interface |
+| `src/app/app.routes.server.ts` | Modified — add `ServerRoute` entries with `getPrerenderParams` |
+| `src/app/prerender-routes/gsc-prerender-params.constant.ts` | **Generated** — committed after the first `npm run gsc-prerender` run |
+
 ### 2.1 Confirm the project is an Angular SSR app
 
 The pattern depends on `@angular/ssr`'s `ServerRoute.getPrerenderParams`. Verify:
@@ -72,7 +83,7 @@ npm install googleapis
 # or: pnpm add googleapis / yarn add googleapis
 ```
 
-> **Requires Node.js 18+** (or Node 14.8+ with `--experimental-vm-modules`). Confirm with `node --version`.
+Confirm `node --version` ≥ 18 (see prerequisites above).
 
 The script uses `google.searchconsole({ version: 'v1' })`. No other runtime deps are needed.
 
@@ -88,6 +99,11 @@ cp <skill-dir>/scripts/run-gsc-prerender.template.mjs scripts/run-gsc-prerender.
 # scripts/run-gsc-prerender.template.mjs from this skill's repository
 # into scripts/run-gsc-prerender.mjs in your project.
 ```
+
+> **For Claude Code:** Read `scripts/run-gsc-prerender.template.mjs` from this skill's
+> directory (bundled alongside this SKILL.md) and write its full contents to
+> `scripts/run-gsc-prerender.mjs` in the user's project. Do not modify the template
+> contents — the user edits the four marked sections after it is placed.
 
 Then edit the four marked sections in the script:
 
@@ -153,6 +169,18 @@ export const serverRoutes: ServerRoute[] = [
 - `prefix` in `PATH_QUERIES[i]` → matches the static segment(s) of `path`
 
 A mismatch is silent — the build succeeds but the route isn't actually prerendered.
+
+**Verify alignment before committing:**
+```bash
+# paramKey in PATH_QUERIES must match the Angular route's :param name
+grep -E "path:.*'" src/app/app.routes.server.ts
+grep "paramKey" scripts/run-gsc-prerender.mjs
+
+# gscPrerenderParamsData key must match the PATH_QUERIES name
+grep "gscPrerenderParamsData\." src/app/app.routes.server.ts
+grep "  name:" scripts/run-gsc-prerender.mjs
+```
+All three must reference the same string. A mismatch produces no build error — the route is silently skipped.
 
 ### 2.7 Service account credential
 
@@ -228,6 +256,18 @@ export interface GscPrerenderParams {
   getPrerenderParams: async () => gscPrerenderParamsData.newPath,
 },
 ```
+
+**Verify alignment before committing:**
+```bash
+# paramKey in PATH_QUERIES must match the Angular route's :param name
+grep -E "path:.*'" src/app/app.routes.server.ts
+grep "paramKey" scripts/run-gsc-prerender.mjs
+
+# gscPrerenderParamsData key must match the PATH_QUERIES name
+grep "gscPrerenderParamsData\." src/app/app.routes.server.ts
+grep "  name:" scripts/run-gsc-prerender.mjs
+```
+All three must reference the same string. A mismatch produces no build error — the route is silently skipped.
 
 ### 3.5 Regenerate locally and verify
 
