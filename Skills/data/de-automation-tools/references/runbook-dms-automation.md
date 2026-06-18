@@ -75,7 +75,7 @@ ORDER BY schema_name;
 
 Use the results to:
 - **Confirm `SOURCE_DB_USER`** — the standard user across all entries is `datalake_dms_user`; flag if any schema uses a different user
-- **Suggest `SOURCE_DB_VAULT_PATH`** — follow the existing pattern `datalake/dms/mysql/{hostname-prefix}` where `hostname-prefix` is the part of the host before the first `.` (e.g., host `bintan-analytics.clsqkkbd9zef...` → `datalake/dms/mysql/bintan-analytics`)
+- **Suggest `SOURCE_DB_VAULT_PATH`** — follow the existing pattern `datalake/dms/mysql/{hostname-prefix}` where `hostname-prefix` is the part of the host before the first `.` (e.g., host `bintan-analytics.<cluster-id>...` → `datalake/dms/mysql/bintan-analytics`)
 
 Show the user a pre-fill suggestion before asking them to confirm:
 
@@ -168,7 +168,7 @@ SOURCE_DB_USER:
   datalake_dms_user
 
 SOURCE_DB_HOST:
-  bintan-analytics.clsqkkbd9zef.ap-southeast-1.rds.amazonaws.com
+  bintan-analytics.<cluster-id>.ap-southeast-1.rds.amazonaws.com
 
 SOURCE_DB_PORT:
   33066

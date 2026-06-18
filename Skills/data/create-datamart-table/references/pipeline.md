@@ -26,7 +26,7 @@ Ask only what cannot be auto-discovered. Collect in **one message**.
 ## STEP 2 — Fetch SQL from S3
 
 ```bash
-aws s3 cp s3://halodoc-datalake-prod-script/transformations/<schema>/<table_name>.sql - \
+aws s3 cp s3://<datalake-script-bucket>/transformations/<schema>/<table_name>.sql - \
   --region ap-southeast-1
 ```
 
@@ -76,13 +76,13 @@ If the default workgroup returns an access error, retry with `--work-group bi-pr
 # default workgroup (try first)
 aws athena start-query-execution \
   --query-string "DESCRIBE <database>.<table>" \
-  --result-configuration "OutputLocation=s3://halodoc-datalake-prod-athena-query-results/schema-check/" \
+  --result-configuration "OutputLocation=s3://<athena-results-bucket>/schema-check/" \
   --region ap-southeast-1
 
 # if access error — retry with bi-prod workgroup
 aws athena start-query-execution \
   --query-string "DESCRIBE <database>.<table>" \
-  --result-configuration "OutputLocation=s3://halodoc-datalake-prod-athena-query-results/schema-check/" \
+  --result-configuration "OutputLocation=s3://<athena-results-bucket>/schema-check/" \
   --work-group bi-prod \
   --region ap-southeast-1
 ```

@@ -34,7 +34,7 @@ for adding columns to existing datamart tables.
 ## Workflow (summary)
 
 1. **Gather intent** — ask for: `table_name`, `table_type`, new column names (types auto-discovered)
-2. **Fetch SQL from S3** — `s3://halodoc-datalake-prod-script/transformations/<schema>/<table_name>.sql`; try all schema folders before asking user
+2. **Fetch SQL from S3** — `s3://<datalake-script-bucket>/transformations/<schema>/<table_name>.sql`; try all schema folders before asking user
 3. **Fetch existing DDL** — query `information_schema.columns` for the target table (validate exists + check for duplicates)
 4. **Introspect source schemas** — AWS CLI Athena for `dim_fact` / `monetization_dwh` / `report_layer` / `nrt_table`; Metabase MCP for `presentations` / `monetization`
 5. **Show SOURCE TYPE ANALYSIS** — display new columns with source→Redshift type mapping; resolve all `❓` before continuing

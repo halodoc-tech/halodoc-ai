@@ -127,7 +127,7 @@ processing can track change order.
 > The `h4d_affiliate` RDS MySQL schema needs to be in the datalake.
 > Engineer runs `DMSAutomation` with:
 >   SCHEMA_NAME = h4d_affiliate
->   SOURCE_DB_HOST = bintan-analytics.clsqkkbd9zef...rds.amazonaws.com
+>   SOURCE_DB_HOST = bintan-analytics.<cluster-id>...rds.amazonaws.com
 >
 > After the job:
 > - DMS endpoint `src-h4d-affiliate` is created and connection-tested

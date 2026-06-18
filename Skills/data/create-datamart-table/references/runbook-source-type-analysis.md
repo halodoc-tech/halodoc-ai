@@ -10,7 +10,7 @@ that would cause silent data loss, overflow errors, or broken incremental loads 
 SQL scripts are stored centrally in S3. Fetch via AWS CLI (streams to stdout, no local download):
 
 ```bash
-aws s3 cp s3://halodoc-datalake-prod-script/transformations/<schema>/<table_name>.sql - \
+aws s3 cp s3://<datalake-script-bucket>/transformations/<schema>/<table_name>.sql - \
   --region ap-southeast-1
 ```
 

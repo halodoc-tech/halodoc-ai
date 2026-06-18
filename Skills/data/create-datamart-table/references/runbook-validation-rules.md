@@ -61,7 +61,7 @@ See `runbook-table-types.md` for exact required keys per table_type.
   - WIB 12:00 → UTC `0 5 * * *`
 
 **Reference:** Check existing schedules using Metabase:
-https://metabase.int.halodoc.com/question/4483-dimensinal-model-monitor
+https://<metabase-internal-host>/question/<card-id>-dimensinal-model-monitor
 
 ---
 

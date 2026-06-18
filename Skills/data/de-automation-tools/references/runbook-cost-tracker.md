@@ -244,8 +244,8 @@ Manages MWAA REST API authentication with JWT caching in Airflow Variables.
 
 | Database | Host | User | DB |
 |---|---|---|---|
-| MySQL (datalake-config) prod | `datalake-config.ckvz21k0no81.ap-southeast-1.rds.amazonaws.com` | `rds-deployment` | `datalake_config` |
-| Redshift | `kalimantan-prod.ccijxvnmpnur.ap-southeast-1.redshift.amazonaws.com` | `de_readonly` | `bontang` |
+| MySQL (datalake-config) prod | `datalake-config.<cluster-id>.ap-southeast-1.rds.amazonaws.com` | `<rds-user>` | `datalake_config` |
+| Redshift | `kalimantan-prod.<cluster-id>.ap-southeast-1.redshift.amazonaws.com` | `<redshift-user>` | `bontang` |
 
 ---
 
@@ -256,8 +256,8 @@ Manages MWAA REST API authentication with JWT caching in Airflow Variables.
 | `AWS_ACCESS_KEY_ID_PROD` | Yes | Prod AWS credentials |
 | `AWS_SECRET_ACCESS_KEY_PROD` | Yes | Prod AWS credentials |
 | `AWS_SESSION_TOKEN_PROD` | Yes | Prod AWS session token |
-| `REDSHIFT_PASSWORD` | Yes | Redshift `de_readonly` password |
-| `DATALAKE_CONFIG_PASSWORD` | Yes | MySQL `rds-deployment` password |
+| `REDSHIFT_PASSWORD` | Yes | Redshift `<redshift-user>` password |
+| `DATALAKE_CONFIG_PASSWORD` | Yes | MySQL `<rds-user>` password |
 
 ---
 
