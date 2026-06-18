@@ -65,7 +65,7 @@ Alerts fire **only** when the issue persists after the 60s re-check — avoids f
 
 **Slack** (`send_slack_alert(message)` in `alert_notification.py`):
 - Uses `slack_sdk` WebClient
-- Channel: `C02BM4FDJTG` (`datalake-prod-alerts`)
+- Channel: `C02BM4FDJTG` (`<alerts-channel>`)
 - Token from `SLACK_BOT_TOKEN` env var
 
 ---
@@ -73,8 +73,8 @@ Alerts fire **only** when the issue persists after the 60s re-check — avoids f
 ## Configuration (`variables.py`)
 
 ```python
-stage_airflow_env_name = 'halodoc-stage-airflow-de-306'
-prod_airflow_env_name  = 'halodoc-datalake-prod-airflow-mwaa-3'
+stage_airflow_env_name = '<stage-airflow-env-name>'
+prod_airflow_env_name  = '<prod-airflow-env-name>'
 components = {'Metadatabase', 'Scheduler', 'Triggerer', 'Dagprocessor'}
 ```
 

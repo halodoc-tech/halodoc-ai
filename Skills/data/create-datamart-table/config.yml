@@ -3,13 +3,13 @@
 #
 # This skill is environment-driven. Fork this file and fill the <...> values
 # for your warehouse. The skill reads these instead of any hard-coded values.
-# Everything below is the original Halodoc setup, shown as a reference example.
+# The values below are a reference example — replace them with your environment's.
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── Backend mode ───────────────────────────────────────────────────────────
 # How the skill discovers table metadata and validates against the registry.
 #   datalake_config : query a metadata DB (datalake_config) via Metabase MCP.
-#                     Use if you run Halodoc's datalake_config schema.
+#                     Use if you run a datalake_config-style metadata schema.
 #   yaml            : read a local manifest (see metadata_manifest) instead.
 #                     Use if you do NOT have datalake_config — fully self-contained.
 backend:

@@ -3,7 +3,7 @@
 #
 # Fork this file and fill the <...> values for your environment. The skill
 # reads these instead of any hard-coded values. The values below are the
-# original Halodoc setup, shown as a reference example.
+# reference example — replace with your environment's values.
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── Backend mode ───────────────────────────────────────────────────────────
@@ -28,10 +28,17 @@ aws:
   dms_account_id_prod:  <PROD_ACCOUNT_ID>
   # Vault path pattern for DMS source DB creds. {prefix} = host part before first '.'
   vault_path_pattern: "datalake/dms/mysql/{prefix}"
+  raw_bucket: <datalake-raw-bucket>        # gsheet/raw landing bucket
+
+# ── Airflow / MWAA ──────────────────────────────────────────────────────────
+airflow:
+  stage_env_name: <stage-airflow-env-name>
+  prod_env_name:  <prod-airflow-env-name>
+  alerts_channel: <alerts-channel>         # Google Chat / Slack channel for health alerts
 
 # ── Redshift (cost tracker) ─────────────────────────────────────────────────
 redshift:
-  cluster_name: kalimantan-prod    # hard-coded in cost tracker variables.py upstream
+  cluster_name: <redshift-cluster-name>    # referenced by the cost tracker
 
 # ── Jenkins jobs (exact names — the real engines) ───────────────────────────
 jenkins:

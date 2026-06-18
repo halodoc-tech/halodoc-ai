@@ -14,7 +14,7 @@ Source of truth extracted from `src/datamart_module/validator.py` and `src/datam
 
 **Check via Metabase MCP:**
 ```
-Use datalake-redshift DB:
+Use Redshift DB:
 SELECT COUNT(*) FROM datalake_config.dimensional_model
 WHERE tgt_table_name = '<table_name>'
   AND active_flag = 'Y'
@@ -86,7 +86,7 @@ https://<metabase-internal-host>/question/<card-id>-dimensinal-model-monitor
 
 **Check dependencies exist via Metabase MCP:**
 ```
-Use datalake-redshift DB:
+Use Redshift DB:
 SELECT COUNT(*) FROM information_schema.tables
 WHERE table_schema = '<schema>' AND table_name = '<table>'
 ```
@@ -97,7 +97,7 @@ WHERE table_schema = '<schema>' AND table_name = '<table>'
 
 **For `dim_fact`** — must already exist:
 ```
-Use datalake-redshift DB:
+Use Redshift DB:
 SELECT DISTINCT business_unit FROM datalake_config.dimensional_model
 WHERE table_type = '<facts|dimensions>'
   AND active_flag = 'Y'

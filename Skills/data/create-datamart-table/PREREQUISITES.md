@@ -18,13 +18,13 @@ validated input for it. Read this before expecting it to work end-to-end.
 
 1. Copy `config.yml`, fill every `<...>` placeholder (buckets, region, Jenkins job names, Metabase DB ids).
 2. Choose `backend.mode`:
-   - `datalake_config` — you run Halodoc's metadata schema; skill validates live via Metabase MCP.
+   - `datalake_config` — you run a datalake_config-style metadata schema; skill validates live via Metabase MCP.
    - `yaml` — you don't; skill reads `metadata.yml` and skips live registry checks.
 3. If your `datalake_config` table or column names differ, override them under `datalake_config:`.
 
 ## Honest scope
 
-- **Fully portable for Halodoc-stack teams** — fill `config.yml` and go.
+- **Fully portable for teams running this platform stack** — fill `config.yml` and go.
 - **Partially portable elsewhere** — without the Jenkins jobs you get generated DDL/config as
   output but must apply it yourself. The taxonomy, encoding rules, and active-record filters are
   Redshift + datalake_config conventions; treat the runbooks as templates, not law.

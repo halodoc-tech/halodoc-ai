@@ -1,14 +1,14 @@
 # Getting Started — de-automation-tools
 
-A plain-language guide for new team members. Explains what each component does, why it exists,
+A plain-language guide for new users. Explains what each component does, why it exists,
 and what happens end-to-end when you run it.
 
 ---
 
 ## The Big Picture
 
-The `de-automation-tools` repository is a collection of five automation scripts that handle
-repetitive Data Engineering tasks at Halodoc. Instead of manually configuring AWS services,
+de-automation-tools is a collection of five automation scripts that handle
+repetitive Data Engineering tasks. Instead of manually configuring AWS services,
 querying databases, or writing SQL by hand, these tools do it for you via Jenkins jobs.
 
 ```
@@ -42,7 +42,7 @@ Runs on a schedule. Every run:
 2. Checks for any DAG import errors created in the last hour
 3. If anything is unhealthy: **waits 60 seconds**, then checks again
 4. If the issue is still there after the re-check: fires an alert to **Google Chat**
-   (`datalake-prod-alerts` channel)
+   (`<alerts-channel>` channel)
 
 The 60-second re-check prevents false-positive alerts for transient blips.
 
@@ -124,14 +124,14 @@ processing can track change order.
 
 ### Example scenario
 
-> The `h4d_affiliate` RDS MySQL schema needs to be in the datalake.
+> The `example_db` RDS MySQL schema needs to be in the datalake.
 > Engineer runs `DMSAutomation` with:
->   SCHEMA_NAME = h4d_affiliate
->   SOURCE_DB_HOST = bintan-analytics.<cluster-id>...rds.amazonaws.com
+>   SCHEMA_NAME = example_db
+>   SOURCE_DB_HOST = mydb.<cluster-id>...rds.amazonaws.com
 >
 > After the job:
-> - DMS endpoint `src-h4d-affiliate` is created and connection-tested
-> - Full-load task copies all `affiliate_products`, `doctor_referrals`, etc. to S3
+> - DMS endpoint `src-example-db` is created and connection-tested
+> - Full-load task copies all `orders`, `customers`, etc. to S3
 > - Incremental task watches the MySQL binlog and streams new changes to S3 continuously
 >
 > Next step: run `TransactionTableOnboarding` to register these tables in the Hudi pipeline.
@@ -172,7 +172,7 @@ Two modes:
 > The Finance team has a Google Sheet with budget allocations: Sheet ID `1BxiM...`, range `Sheet1!A:H`.
 >
 > DE engineer runs GSheet Onboarding (new-table):
-> - Row inserted: `gsheet_export` now knows this sheet → S3 bucket `halodoc-datalake-prod-raw/gsheets/budget/`
+> - Row inserted: `gsheet_export` now knows this sheet → S3 bucket `<datalake-raw-bucket>/gsheets/budget/`
 > - Glue crawler updated to include the new S3 path
 > - Crawler runs → schema registered in Glue catalog
 > - DAG triggered → sheet data lands in S3
@@ -220,13 +220,13 @@ Three modes:
 
 ### Example scenario
 
-> After `DMSAutomation` is running for `h4d_affiliate`, the tables are landing in S3 as raw Parquet.
+> After `DMSAutomation` is running for `example_db`, the tables are landing in S3 as raw Parquet.
 > But Airflow doesn't know to process them yet.
 >
 > DE engineer runs `TransactionTableOnboarding`:
->   SCHEMA_NAME  = h4d_affiliate
->   TargetDbName = h4d_affiliate
->   TableNames   = affiliate_products,doctor_referrals,doctor_referral_orders
+>   SCHEMA_NAME  = example_db
+>   TargetDbName = example_db
+>   TableNames   = orders,customers,customer_orders
 >   ExecutionMethod = new-table
 >
 > After the job:
@@ -234,12 +234,12 @@ Three modes:
 > - DMS task is restarted with the new tables included
 > - `load_raw_to_process_full_load_eks_dag` runs → Hudi tables created in the datalake
 >
-> Analysts can now query `h4d_affiliate.affiliate_products` as a Hudi table.
+> Analysts can now query `example_db.orders` as a Hudi table.
 >
-> A month later, a new column is added to `doctor_referrals` in RDS.
+> A month later, a new column is added to `customers` in RDS.
 > Engineer runs `TransactionTableOnboarding` again:
 >   ExecutionMethod = new-column-with-full-load
->   TableNames      = doctor_referrals
+>   TableNames      = customers
 > → Column appears in the Hudi table after the next DAG run.
 
 ---

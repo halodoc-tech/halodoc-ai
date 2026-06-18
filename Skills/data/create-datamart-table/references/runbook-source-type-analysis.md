@@ -50,7 +50,7 @@ From the SQL file, identify:
 For each source table found in step 2:
 
 ```
-Use datalake-redshift DB (Metabase MCP):
+Use Redshift DB (Metabase MCP):
 SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale
 FROM information_schema.columns
 WHERE table_schema = '<source_schema>'

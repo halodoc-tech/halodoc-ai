@@ -1,7 +1,7 @@
 ---
 name: create-datamart-table
 description: >
-  Creates a new datamart table end-to-end at Halodoc: collects intent, fetches source SQL from S3,
+  Creates a new datamart table end-to-end: collects intent, fetches source SQL from S3,
   introspects source schemas via Athena or Redshift, generates validated redshift_ddl and rds_config,
   and outputs copy-paste-ready Jenkins parameters.
 
@@ -52,7 +52,7 @@ See `PREREQUISITES.md` for what backend this skill needs.
 
 ## Key rules
 
-- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` on every config-table query (Halodoc default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
+- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` on every config-table query (default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
 - **Respect `backend.mode`** — never call Metabase MCP when mode is `yaml`; validate against `metadata.yml` and state that validation is manifest-only
 
 ## Workflow (summary)

@@ -90,7 +90,7 @@ TableNames:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Example** (from `h4d_affiliate` schema):
+**Example** (from `example_db` schema):
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -116,15 +116,15 @@ IncrementalKey:
   updated_at
 
 TargetDbName:
-  h4d_affiliate
+  example_db
 
 SchemaName:
-  h4d_affiliate
+  example_db
 
 TableNames:
-  affiliate_product_audit,affiliate_products,doctor_referral_order_items,
-  doctor_referral_orders,doctor_referral_performance_metrics,
-  doctor_referral_products,doctor_referrals
+  orders_audit,orders,order_items,
+  customer_orders,customer_metrics,
+  order_products,customers
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```

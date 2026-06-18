@@ -1,7 +1,7 @@
 ---
 name: de-automation-tools
 description: >
-  Use when working in the de-automation-tools repo or asked about HaloDoc DE automation pipelines.
+  Use when working with DE (Data Engineering) automation pipelines.
   "Transactional table" here means RDS (MySQL) → S3 via DMS, readable by Athena — NOT datamart/Redshift.
   Use when the user mentions: "onboard transactional table", "migrate rds table", "rds to s3",
   "rds via dms", "add column to rds-migrated table", "add column to dms-migrated table",
@@ -72,9 +72,9 @@ datalake_config DB).
 - **"Transactional table" = RDS → S3 via DMS** — DMS replicates RDS (MySQL) to S3; Athena queries that S3 data. This skill does NOT touch Redshift or datamart tables
 - **"Add column to migrated table" = Athena table (DMS-migrated from RDS)** — if the user says "add column" without specifying, confirm whether the table is an Athena table migrated via DMS (this skill) or a Redshift table (redirect to `add-datamart-column`)
 - **Datamart tables are out of scope** — Athena → Redshift (DWH/fact/dim) and Redshift → Redshift (presentation/mart) are handled by `create-datamart-table`; adding columns to any Redshift table is handled by `add-datamart-column`
-- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` (Halodoc default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
+- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` (default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
 - **Pre-checks** — when `backend.mode: datalake_config`, gsheet onboarding and transactional migration must query Metabase MCP before generating a Jenkins config (the runbook specifies what). When `backend.mode: none`, skip the live query and ask the user to confirm the values manually
-- **Jenkins job names** — use the names from `config.yml` `jenkins.*` (Halodoc defaults below)
+- **Jenkins job names** — use the names from `config.yml` `jenkins.*` (defaults below)
 - **`new-column-*` (transactional migration)** — only 5 params needed (`Environment`, `ExecutionMethod`, `SchemaName`, `TargetDbName`, `TableNames`); do NOT ask for `JobGroup`, `Frequency`, `PartitionColumn`, or `IncrementalKey`
 - **Cost questions** — always determine week boundaries first (Step 1 in runbook); service-level diffs come from `de_metrics`; USAGE_TYPE attribution requires AWS MCP
 - **Jenkins job names are exact**: `TransactionTableOnboarding` · `DMSAutomation` · `GsheetIngestionAutomation` · `WeeklyCostTrackerAutomation`

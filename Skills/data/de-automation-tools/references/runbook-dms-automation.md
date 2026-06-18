@@ -31,7 +31,7 @@ task (CDC, ongoing changes).
 > **This step is mandatory.** Do not ask the user for parameters or generate a Jenkins config
 > until you have completed both queries below.
 
-Use **Metabase MCP**, **DB ID 41** (`datalake-config-prod`, MySQL).
+Use **Metabase MCP**, **DB ID 41** (`datalake_config`, MySQL).
 
 #### Step 1 — Check if the schema already has an endpoint
 
@@ -75,7 +75,7 @@ ORDER BY schema_name;
 
 Use the results to:
 - **Confirm `SOURCE_DB_USER`** — the standard user across all entries is `datalake_dms_user`; flag if any schema uses a different user
-- **Suggest `SOURCE_DB_VAULT_PATH`** — follow the existing pattern `datalake/dms/mysql/{hostname-prefix}` where `hostname-prefix` is the part of the host before the first `.` (e.g., host `bintan-analytics.<cluster-id>...` → `datalake/dms/mysql/bintan-analytics`)
+- **Suggest `SOURCE_DB_VAULT_PATH`** — follow the existing pattern `datalake/dms/mysql/{hostname-prefix}` where `hostname-prefix` is the part of the host before the first `.` (e.g., host `mydb.<cluster-id>...` → `datalake/dms/mysql/mydb`)
 
 Show the user a pre-fill suggestion before asking them to confirm:
 
@@ -148,7 +148,7 @@ INCR_LOAD_INSTANCE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Example** (from `h4d_affiliate` schema):
+**Example** (from `example_db` schema):
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -159,7 +159,7 @@ Environment:
   prod
 
 SCHEMA_NAME:
-  h4d_affiliate
+  example_db
 
 SOURCE_ENGINE:
   mysql
@@ -168,19 +168,19 @@ SOURCE_DB_USER:
   datalake_dms_user
 
 SOURCE_DB_HOST:
-  bintan-analytics.<cluster-id>.ap-southeast-1.rds.amazonaws.com
+  mydb.<cluster-id>.ap-southeast-1.rds.amazonaws.com
 
 SOURCE_DB_PORT:
   33066
 
 SOURCE_DB_VAULT_PATH:
-  datalake/dms/mysql/bintan-analytics
+  datalake/dms/mysql/mydb
 
 TARGET_FULL_LOAD_ENDPOINT:
-  tgt-full-load-s3-halodoc-datalake-prod
+  tgt-full-load-s3-<datalake-bucket-prod>
 
 TARGET_INCR_LOAD_ENDPOINT:
-  tgt-incr-load-s3-halodoc-datalake-prod
+  tgt-incr-load-s3-<datalake-bucket-prod>
 
 FULL_LOAD_INSTANCE:
   dms-prod-full-load
@@ -199,8 +199,8 @@ INCR_LOAD_INSTANCE:
 
 | Resource | ID |
 |---|---|
-| Full-load target endpoint | `tgt-full-load-s3-halodoc-datalake-stage` |
-| Incremental target endpoint | `tgt-incr-load-s3-halodoc-datalake-stage` |
+| Full-load target endpoint | `tgt-full-load-s3-<datalake-bucket-stage>` |
+| Incremental target endpoint | `tgt-incr-load-s3-<datalake-bucket-stage>` |
 | Full-load replication instance | `dms-stage-incr-group2-rep` |
 | Incremental replication instance | `dms-stage-incr-group2-rep` |
 
@@ -208,8 +208,8 @@ INCR_LOAD_INSTANCE:
 
 | Resource | ID |
 |---|---|
-| Full-load target endpoint | `tgt-full-load-s3-halodoc-datalake-prod` |
-| Incremental target endpoint | `tgt-incr-load-s3-halodoc-datalake-prod` |
+| Full-load target endpoint | `tgt-full-load-s3-<datalake-bucket-prod>` |
+| Incremental target endpoint | `tgt-incr-load-s3-<datalake-bucket-prod>` |
 | Full-load replication instance | `dms-prod-full-load` |
 | Incremental replication instance | `dms-prod-incr-group3-rep` _(verify group number with user — multiple groups exist)_ |
 

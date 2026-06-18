@@ -3,7 +3,7 @@
 #
 # This replaces the datalake_config lookups (dimensional_model,
 # transformation_master, watermark) for environments that do not run
-# Halodoc's metadata DB. The skill reads this file to:
+# the metadata DB. The skill reads this file to:
 #   - check whether a target table already exists (don't re-create)
 #   - validate that declared dependencies exist
 #   - resolve business_unit and source columns without Metabase MCP

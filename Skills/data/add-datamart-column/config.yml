@@ -3,7 +3,7 @@
 #
 # Fork this file and fill the <...> values for your warehouse. The skill reads
 # these instead of any hard-coded values. The values below are the original
-# Halodoc setup, shown as a reference example.
+# reference example. Replace with your environment's values.
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── Backend mode ───────────────────────────────────────────────────────────

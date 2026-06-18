@@ -119,7 +119,7 @@ Athena/PySpark (source)
 {
   "incremental_key": "tpa_client_reason_codes_updated_at",
   "business_key": "tpa_client_reason_codes_id",
-  "table_dependencies": "[{'table_name': 'misool_catalog.ins_client_reason_codes'}]",
+  "table_dependencies": "[{'table_name': 'source_db.example_table'}]",
   "table_type": "dimensions",
   "business_unit": "marketing",
   "queue_group": "g0",

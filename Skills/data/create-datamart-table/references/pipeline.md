@@ -140,7 +140,7 @@ Anything to change? Reply "looks good" to continue.
 
 ## STEP 4 — Validate: table does not already exist
 
-**Metabase MCP** (datalake-redshift):
+**Metabase MCP** (Redshift):
 ```sql
 SELECT COUNT(*) FROM datalake_config.dimensional_model
 WHERE tgt_table_name = '<table_name>'
@@ -152,7 +152,7 @@ Count > 0 → stop. Table exists. Suggest `add-datamart-column` skill.
 
 ## STEP 5 — Validate: business_unit
 
-**Metabase MCP** (datalake-redshift):
+**Metabase MCP** (Redshift):
 ```sql
 SELECT DISTINCT business_unit FROM datalake_config.dimensional_model
 WHERE table_type = '<facts|dimensions>'
@@ -165,7 +165,7 @@ WHERE table_type = '<facts|dimensions>'
 
 ## STEP 6 — Validate: dependencies exist
 
-**Metabase MCP** (datalake-redshift):
+**Metabase MCP** (Redshift):
 ```sql
 SELECT COUNT(*) FROM information_schema.tables
 WHERE table_schema = '<schema>' AND table_name = '<table>'

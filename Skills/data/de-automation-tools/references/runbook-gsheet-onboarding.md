@@ -20,7 +20,7 @@ the Airflow DAG to ingest the data.
 | `Environment` | Choice | `stage` · `prod` |
 | `ExecutionMethod` | Choice | `new-table` · `new-column` |
 | `GSHEET_ID` | String | Google Sheet document ID (from the sheet URL) |
-| `SHEET_RANGE` | String | e.g., `Sheet1!A1:Z` or `b2b_sku_homecare!A1:C` |
+| `SHEET_RANGE` | String | e.g., `Sheet1!A1:Z` or `example_sheet!A1:C` |
 | `GSHEET_TABLE_NAME` | String | Target table name in the datalake |
 | `JOB_GROUP` | String | `g0` or `g1` |
 | `BUSINESS_UNIT` | String | Business unit tag (see note below) |
@@ -33,14 +33,14 @@ the Airflow DAG to ingest the data.
 > ORDER BY business_unit;
 > ```
 >
-> Known existing values include: `halolab`, `halodoc`. Show the list to the user and ask them to pick one or confirm a new one.
+> Known existing values include: `business_unit_a`, `business_unit_b`. Show the list to the user and ask them to pick one or confirm a new one.
 
 ### Pre-check — ALWAYS Verify via Metabase Before Generating Config
 
 > **This step is mandatory.** Run the queries below before asking for any missing parameters
 > or generating a Jenkins config. The execution method determines which checks to run.
 
-Use **Metabase MCP**, **DB ID 41** (`datalake-config-prod`, MySQL).
+Use **Metabase MCP**, **DB ID 41** (`datalake_config`, MySQL).
 
 ---
 
@@ -147,7 +147,7 @@ Run these checks and flag any issues **before** generating config. Each message 
 | Check | Condition | What to tell the user |
 |---|---|---|
 | Sheet ID format | Should be ~44 chars, alphanumeric + hyphens/underscores | "The Sheet ID looks too short/long. Copy it directly from the Google Sheet URL: the part between `/d/` and `/edit`." |
-| Sheet range format | Must follow `SheetName!StartCell:EndCol` pattern | "The range `{value}` doesn't look right. Use the format `SheetName!A1:Z` (e.g., `Sheet1!A1:Z` or `b2b_sku_homecare!A1:C`)." |
+| Sheet range format | Must follow `SheetName!StartCell:EndCol` pattern | "The range `{value}` doesn't look right. Use the format `SheetName!A1:Z` (e.g., `Sheet1!A1:Z` or `example_sheet!A1:C`)." |
 | Job group | Must be `g0` or `g1` | "Job group must be `g0` or `g1`. You entered `{value}`." |
 | Table name (new-table) | Should not contain spaces or special characters | "Table names can only contain letters, numbers, and underscores. `{value}` contains invalid characters." |
 
@@ -208,7 +208,7 @@ SHEET_RANGE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Example** (from `b2b_sku_homecare` sheet):
+**Example** (from `example_sheet` sheet):
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -225,16 +225,16 @@ GSHEET_ID:
   1z6Ep98HgiOLgQhvbV-Gd2IL2kJu7BQFxj81ofetDGxk
 
 SHEET_RANGE:
-  b2b_sku_homecare!A1:C
+  example_sheet!A1:C
 
 GSHEET_TABLE_NAME:
-  b2b_sku_homecare
+  example_sheet
 
 JOB_GROUP:
   g0
 
 BUSINESS_UNIT:
-  halolab
+  business_unit_a
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -320,8 +320,8 @@ Triggers `gsheet_migration_by_sheet_range_dag` via MWAA REST API.
 | `stage_crawler_name` | `sheet_crawler` |
 | `prod_crawler_name` | `datalake_raw_gsheet_crawler` |
 | `dag_name` | `gsheet_migration_by_sheet_range_dag` |
-| `stage_airflow_env_name` | `halodoc-stage-airflow-de-306` |
-| `prod_airflow_env_name` | `halodoc-datalake-prod-airflow-mwaa-3` |
+| `stage_airflow_env_name` | `<stage-airflow-env-name>` |
+| `prod_airflow_env_name` | `<prod-airflow-env-name>` |
 
 ---
 

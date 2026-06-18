@@ -59,7 +59,7 @@ Use this section when the user asks about DE costs, week-over-week changes, or w
 
 Run this first regardless of whether AWS MCP is available.
 
-Use **Metabase MCP, DB ID 41** (`datalake-config-prod`, MySQL):
+Use **Metabase MCP, DB ID 41** (`datalake_config`, MySQL):
 
 ```sql
 SELECT
@@ -245,7 +245,7 @@ Manages MWAA REST API authentication with JWT caching in Airflow Variables.
 | Database | Host | User | DB |
 |---|---|---|---|
 | MySQL (datalake-config) prod | `datalake-config.<cluster-id>.ap-southeast-1.rds.amazonaws.com` | `<rds-user>` | `datalake_config` |
-| Redshift | `kalimantan-prod.<cluster-id>.ap-southeast-1.redshift.amazonaws.com` | `<redshift-user>` | `bontang` |
+| Redshift | `<redshift-cluster-name>.<cluster-id>.ap-southeast-1.redshift.amazonaws.com` | `<redshift-user>` | `<redshift-db>` |
 
 ---
 
@@ -285,7 +285,7 @@ Manages MWAA REST API authentication with JWT caching in Airflow Variables.
 - `get_datalake_cost()` adds **1 day** to `end_time` — boto3 Cost Explorer excludes the end date
 - MWAA utilisation: period must be `604800` (weekly); other periods return empty
 - Only `success` and `failed` DAG run states are counted; `running`/`queued` are skipped
-- Redshift cluster name is hardcoded in `variables.py` as `kalimantan-prod`
+- Redshift cluster name is hardcoded in `variables.py` as `<redshift-cluster-name>`
 
 ---
 

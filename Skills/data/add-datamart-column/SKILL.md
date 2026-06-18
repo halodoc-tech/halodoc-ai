@@ -56,7 +56,7 @@ names) come from there. See `PREREQUISITES.md` for required backend.
 
 ## Key rules
 
-- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` (Halodoc default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
+- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` (default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
 - **Respect `backend.mode`** — never call Metabase MCP when mode is `yaml`; validate against `metadata.yml`
 - `add-column` DDL is **flat JSON** — not nested under `schema` like create-table
 - **Never run the ETL query** — infer types statically from SQL expressions + DESCRIBE / information_schema
