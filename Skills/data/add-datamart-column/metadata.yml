@@ -1,0 +1,16 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Local table registry — used ONLY when config.yml sets backend.mode: yaml.
+#
+# Replaces the datalake_config check that a target table exists before adding
+# columns. List the tables you may add columns to, with their current columns
+# so the skill can detect duplicates.
+# ─────────────────────────────────────────────────────────────────────────
+
+tables:
+  - name: fact_consultation
+    schema: dim_fact
+    type: dim_fact
+    columns:                       # existing columns (name: redshift_type)
+      consultation_id: bigint
+      doctor_id: bigint
+      created_at: timestamp

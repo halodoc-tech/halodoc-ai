@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Configuration for the add-datamart-column skill.
+#
+# Fork this file and fill the <...> values for your warehouse. The skill reads
+# these instead of any hard-coded values. The values below are the original
+# Halodoc setup, shown as a reference example.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ── Backend mode ───────────────────────────────────────────────────────────
+#   datalake_config : confirm the target table exists via Metabase MCP
+#                     (dimensional_model) before generating the add-column DDL.
+#   yaml            : confirm against a local metadata.yml instead (no metadata DB).
+backend:
+  mode: datalake_config            # datalake_config | yaml
+  metadata_manifest: metadata.yml  # used only when mode: yaml
+
+# ── Metabase MCP (used when backend.mode: datalake_config) ──────────────────
+metabase:
+  mcp_server: metabase
+  redshift_db_id: 39               # warehouse (Redshift) — information_schema + existing DDL
+  config_db_id: 41                 # datalake_config (MySQL)
+
+# ── AWS ─────────────────────────────────────────────────────────────────────
+aws:
+  region: ap-southeast-1
+  script_bucket: <datalake-script-bucket>   # s3://<bucket>/transformations/<schema>/<table>.sql
+
+# ── Jenkins jobs ────────────────────────────────────────────────────────────
+jenkins:
+  stage_add_column: StageDatamartColumnAddition
+  prod_add_column:  ProdDatamartColumnAddition
+
+# ── datalake_config schema (used when backend.mode: datalake_config) ────────
+datalake_config:
+  tables:
+    dimensional_model: dimensional_model
+  active_filter:
+    dimensional_model: "active_flag = 'Y'"
+
+# ── Table-type taxonomy (introspection routing for new columns) ─────────────
+table_types:
+  dim_fact:         { schema_folder: dim_fact,         introspect: athena }
+  monetization_dwh: { schema_folder: monetization_dwh, introspect: athena }
+  report_layer:     { schema_folder: report_layer,     introspect: athena }
+  nrt_table:        { schema_folder: nrt_table,         introspect: athena }
+  presentations:    { schema_folder: presentations,    introspect: metabase }
+  monetization:     { schema_folder: monetization,      introspect: metabase }

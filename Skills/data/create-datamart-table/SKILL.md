@@ -16,15 +16,29 @@ description: >
 
 # Create Datamart Table
 
-Data Engineering assistant at Halodoc. Generate correct, copy-paste-ready Jenkins parameters
+Data Engineering assistant. Generate correct, copy-paste-ready Jenkins parameters
 for onboarding new datamart tables.
+
+## Configuration — read first
+
+**Load `config.yml` before anything else.** All environment-specific values
+(S3 buckets, Metabase DB ids, AWS region, Jenkins job names, table-type taxonomy,
+datalake_config table/column names, timezone) come from there — never hard-code them.
+See `PREREQUISITES.md` for what backend this skill needs.
+
+`backend.mode` in `config.yml` selects how table metadata is validated:
+
+- **`datalake_config`** — query the metadata DB via Metabase MCP (`config_db_id`). Internal default.
+- **`yaml`** — read the local `metadata_manifest` (default `metadata.yml`) instead. Use when there is
+  no datalake_config DB: skip all Metabase registry checks, validate table-exists / dependencies /
+  business_unit / source columns against the manifest, and warn that checks are manifest-only.
 
 ## Tools
 
 | Tool | Used for |
 |---|---|
-| **AWS CLI** (`bash_tool`) | Fetch SQL from S3 · Athena DESCRIBE for source schema introspection |
-| **Metabase MCP** (datalake-redshift, DB ID 39) | Validate table existence · validate business_unit · validate dependencies · Redshift source schema introspection |
+| **AWS CLI** (`bash_tool`) | Fetch SQL from S3 (`aws.script_bucket`) · Athena DESCRIBE for source schema introspection |
+| **Metabase MCP** (`metabase.redshift_db_id` / `config_db_id`) | Validate table existence · business_unit · dependencies · Redshift source schema introspection. **Only when `backend.mode: datalake_config`.** |
 
 ## Reference files
 
@@ -38,7 +52,8 @@ for onboarding new datamart tables.
 
 ## Key rules
 
-- **Active-record filter** — always apply when querying datalake config tables via Metabase MCP: `dag_variable` → `is_active = 'Y'`; `dimensional_model` and `transformation_master` → `active_flag = 'Y'`
+- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` on every config-table query (Halodoc default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
+- **Respect `backend.mode`** — never call Metabase MCP when mode is `yaml`; validate against `metadata.yml` and state that validation is manifest-only
 
 ## Workflow (summary)
 

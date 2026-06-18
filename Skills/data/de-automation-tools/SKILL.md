@@ -18,8 +18,18 @@ description: >
 
 # de-automation-tools
 
-Data Engineering assistant at Halodoc. Route requests to the correct component, run pre-checks
+Data Engineering assistant. Route requests to the correct component, run pre-checks
 via Metabase MCP, and output copy-paste-ready Jenkins parameters.
+
+## Configuration — read first
+
+**Load `config.yml` before anything else.** Environment-specific values (region, DMS
+account ids, Vault path pattern, Redshift cluster, Jenkins job names, Metabase DB id,
+datalake_config names) come from there. See `PREREQUISITES.md` for required backend.
+
+`backend.mode`: `datalake_config` runs live pre-checks via Metabase MCP; `none` skips
+them and asks the user to supply/confirm values manually (for environments with no
+datalake_config DB).
 
 ## Skill disambiguation
 
@@ -36,7 +46,7 @@ via Metabase MCP, and output copy-paste-ready Jenkins parameters.
 
 | Tool | Used for |
 |---|---|
-| **Metabase MCP** (datalake-config-prod, DB ID 41) | Pre-checks · cost week reference · gsheet/table validation · `de_metrics` queries |
+| **Metabase MCP** (`metabase.config_db_id`) | Pre-checks · cost week reference · gsheet/table validation · `de_metrics` queries. **Only when `backend.mode: datalake_config`.** |
 | **AWS MCP** (`mcp__awslabs-aws-api__call_aws`) | Cost Explorer USAGE_TYPE attribution · DMS task inspection — optional enrichment |
 
 ## Reference files
@@ -62,8 +72,9 @@ via Metabase MCP, and output copy-paste-ready Jenkins parameters.
 - **"Transactional table" = RDS → S3 via DMS** — DMS replicates RDS (MySQL) to S3; Athena queries that S3 data. This skill does NOT touch Redshift or datamart tables
 - **"Add column to migrated table" = Athena table (DMS-migrated from RDS)** — if the user says "add column" without specifying, confirm whether the table is an Athena table migrated via DMS (this skill) or a Redshift table (redirect to `add-datamart-column`)
 - **Datamart tables are out of scope** — Athena → Redshift (DWH/fact/dim) and Redshift → Redshift (presentation/mart) are handled by `create-datamart-table`; adding columns to any Redshift table is handled by `add-datamart-column`
-- **Active-record filter** — always apply when querying datalake config tables via Metabase MCP: `dag_variable` → `is_active = 'Y'`; `dimensional_model` and `transformation_master` → `active_flag = 'Y'`
-- **Pre-checks are mandatory** — for gsheet onboarding and transactional migration, always query Metabase MCP before generating a Jenkins config; the runbook specifies what to check
+- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` (Halodoc default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
+- **Pre-checks** — when `backend.mode: datalake_config`, gsheet onboarding and transactional migration must query Metabase MCP before generating a Jenkins config (the runbook specifies what). When `backend.mode: none`, skip the live query and ask the user to confirm the values manually
+- **Jenkins job names** — use the names from `config.yml` `jenkins.*` (Halodoc defaults below)
 - **`new-column-*` (transactional migration)** — only 5 params needed (`Environment`, `ExecutionMethod`, `SchemaName`, `TargetDbName`, `TableNames`); do NOT ask for `JobGroup`, `Frequency`, `PartitionColumn`, or `IncrementalKey`
 - **Cost questions** — always determine week boundaries first (Step 1 in runbook); service-level diffs come from `de_metrics`; USAGE_TYPE attribution requires AWS MCP
 - **Jenkins job names are exact**: `TransactionTableOnboarding` · `DMSAutomation` · `GsheetIngestionAutomation` · `WeeklyCostTrackerAutomation`

@@ -14,15 +14,27 @@ description: >
 
 # Add Datamart Column
 
-Data Engineering assistant at Halodoc. Generate correct, copy-paste-ready Jenkins parameters
+Data Engineering assistant. Generate correct, copy-paste-ready Jenkins parameters
 for adding columns to existing datamart tables.
+
+## Configuration — read first
+
+**Load `config.yml` before anything else.** Environment-specific values (S3 bucket,
+Metabase DB ids, region, Jenkins job names, table-type taxonomy, datalake_config
+names) come from there. See `PREREQUISITES.md` for required backend.
+
+`backend.mode` selects how the target table is confirmed:
+
+- **`datalake_config`** — confirm table exists via Metabase MCP (`dimensional_model`).
+- **`yaml`** — confirm against `metadata.yml` (existing columns listed there for
+  duplicate detection); skip Metabase, warn that the check is manifest-only.
 
 ## Tools
 
 | Tool | Used for |
 |---|---|
-| **AWS CLI** (`bash_tool`) | Fetch SQL from S3 · Athena DESCRIBE for source schema introspection |
-| **Metabase MCP** (datalake-redshift, DB ID 39) | Validate table existence · fetch existing DDL · check for duplicate columns |
+| **AWS CLI** (`bash_tool`) | Fetch SQL from S3 (`aws.script_bucket`) · Athena DESCRIBE for source schema introspection |
+| **Metabase MCP** (`metabase.redshift_db_id`) | Validate table existence · fetch existing DDL · check for duplicate columns. **Only when `backend.mode: datalake_config`.** |
 
 ## Reference files
 
@@ -44,7 +56,8 @@ for adding columns to existing datamart tables.
 
 ## Key rules
 
-- **Active-record filter** — always apply when querying datalake config tables via Metabase MCP: `dag_variable` → `is_active = 'Y'`; `dimensional_model` and `transformation_master` → `active_flag = 'Y'`
+- **Active-record filter** — when `backend.mode: datalake_config`, apply the filters from `config.yml` `datalake_config.active_filter` (Halodoc default: `dag_variable` → `is_active = 'Y'`; `dimensional_model` / `transformation_master` → `active_flag = 'Y'`)
+- **Respect `backend.mode`** — never call Metabase MCP when mode is `yaml`; validate against `metadata.yml`
 - `add-column` DDL is **flat JSON** — not nested under `schema` like create-table
 - **Never run the ETL query** — infer types statically from SQL expressions + DESCRIBE / information_schema
 - **ETL routing** — Athena MCP for `dim_fact` / `monetization_dwh` / `report_layer` / `nrt_table`; Metabase for `presentations` / `monetization`

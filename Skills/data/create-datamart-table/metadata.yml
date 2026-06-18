@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Local table registry — used ONLY when config.yml sets backend.mode: yaml.
+#
+# This replaces the datalake_config lookups (dimensional_model,
+# transformation_master, watermark) for environments that do not run
+# Halodoc's metadata DB. The skill reads this file to:
+#   - check whether a target table already exists (don't re-create)
+#   - validate that declared dependencies exist
+#   - resolve business_unit and source columns without Metabase MCP
+#
+# Keep one entry per onboarded datamart table.
+# ─────────────────────────────────────────────────────────────────────────
+
+tables:
+  - name: fact_consultation          # target datamart table name
+    schema: dim_fact                 # target schema (matches a table_types schema_folder)
+    type: dim_fact                   # one of config.yml table_types keys
+    business_unit: teleconsultation
+    dependencies:                    # other table names that must run first
+      - dim_doctor
+      - dim_patient
+    columns:                         # source/target columns (name: redshift_type)
+      consultation_id: bigint
+      doctor_id: bigint
+      patient_id: bigint
+      created_at: timestamp
+      status: "varchar(64)"
+
+  # - name: dim_doctor
+  #   schema: dim_fact
+  #   type: dim_fact
+  #   business_unit: teleconsultation
+  #   dependencies: []
+  #   columns:
+  #     doctor_id: bigint
+  #     doctor_name: "varchar(256)"
