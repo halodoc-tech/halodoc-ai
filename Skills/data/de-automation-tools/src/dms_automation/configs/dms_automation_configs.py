@@ -18,6 +18,8 @@ _C = _load()
 _DB = _C["databases"]["datalake_config"]
 _DMS = _C["dms"]
 
+region = _C["aws"]["region"]
+
 DATALAKE_CONFIG_STAGE_HOST = _DB["stage_host"]
 DATALAKE_CONFIG_STAGE_USER = _DB["stage_user"]
 

@@ -27,9 +27,10 @@ via Metabase MCP, and output copy-paste-ready Jenkins parameters.
 account ids, Vault path pattern, Redshift cluster, Jenkins job names, Metabase DB id,
 datalake_config names) come from there. See `PREREQUISITES.md` for required backend.
 
-`backend.mode`: `datalake_config` runs live pre-checks via Metabase MCP; `none` skips
-them and asks the user to supply/confirm values manually (for environments with no
-datalake_config DB).
+`backend.mode` (default **`yaml`**): where dms / gsheet / transactional read & write
+their registry state. `yaml` uses local YAML files under `registry_dir` — **no database
+needed** (AWS actions still run; only the registry is local). `datalake_config` is the
+original internal mode that queries the metadata DB via Metabase MCP.
 
 **Runnable source** for all five components lives in `src/` (config-driven by `config.yml`).
 See `src/README.md` to install and run; the runbooks under `references/` document each one.

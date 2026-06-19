@@ -1,0 +1,10 @@
+# Google Sheets registered for ingestion. Written by gsheet_onboarding.
+- source: gsheet
+  sheetname: sales_sheet
+  sheet_id: <your-google-sheet-id>
+  sheet_range: Sheet1!A1:Z
+  target_s3_bucket: my-datalake-prod
+  target_s3_prefix: raw/fileupload/source=gsheet
+  business_unit: finance
+  active_flag: 'Y'
+  job_group: g0

@@ -7,13 +7,14 @@
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── Backend mode ───────────────────────────────────────────────────────────
-# Pre-checks (rds_endpoints lookup, gsheet validation, de_metrics, cost weeks)
-# query the datalake_config metadata DB via Metabase MCP.
-#   datalake_config : run live pre-checks via Metabase MCP (default, internal).
-#   none            : skip live pre-checks; ask the user to supply/confirm values
-#                     manually. Use if you have no datalake_config DB.
+# Where dms / gsheet / transactional read & write their registry state:
+#   datalake_config : a metadata DB (MySQL) — the original internal setup.
+#   yaml            : local YAML files under registry_dir — NO database needed.
+#                     Use this to run the tools standalone. AWS actions (DMS,
+#                     Glue, MWAA DAG triggers) still run; only the registry is local.
 backend:
-  mode: datalake_config            # datalake_config | none
+  mode: yaml                       # datalake_config | yaml
+  registry_dir: registry           # folder (relative to this file) for the YAML registry
 
 # ── Metabase MCP (used when backend.mode: datalake_config) ──────────────────
 metabase:
@@ -22,7 +23,7 @@ metabase:
 
 # ── AWS ─────────────────────────────────────────────────────────────────────
 aws:
-  region: ap-southeast-1
+  region: <aws_region>
   # DMS replication-instance accounts (used in instance ARNs).
   dms_account_id_stage: <STAGE_ACCOUNT_ID>
   dms_account_id_prod:  <PROD_ACCOUNT_ID>
@@ -68,13 +69,13 @@ dms:
     incr_load_endpoint_id: <stage-incr-load-endpoint-id>
     full_load_instance_id: <stage-full-load-instance-id>
     incr_load_instance_id: <stage-incr-load-instance-id>
-    full_load_replication_instance_arn: "arn:aws:dms:ap-southeast-1:<STAGE_ACCOUNT_ID>:rep:<stage-rep-id>"
+    full_load_replication_instance_arn: "arn:aws:dms:<aws_region>:<STAGE_ACCOUNT_ID>:rep:<stage-rep-id>"
   prod:
     full_load_endpoint_id: <prod-full-load-endpoint-id>
     incr_load_endpoint_id: <prod-incr-load-endpoint-id>
     full_load_instance_id: <prod-full-load-instance-id>
     incr_load_instance_id: <prod-incr-load-instance-id>
-    full_load_replication_instance_arn: "arn:aws:dms:ap-southeast-1:<PROD_ACCOUNT_ID>:rep:<prod-rep-id>"
+    full_load_replication_instance_arn: "arn:aws:dms:<aws_region>:<PROD_ACCOUNT_ID>:rep:<prod-rep-id>"
 
 # ── Transactional migration constants ───────────────────────────────────────
 transactional:

@@ -7,6 +7,7 @@ from configs.datalake_config_creds import *
 from sql_scripts.gsheet_export import *
 from utils.api import trigger_dag
 from utils.variables import *
+import registry
 
 
 def get_crawler_data_sources(glue, crawler_name):
@@ -127,7 +128,52 @@ def execute_query(cursor, query):
     cursor.execute(query)
 
 
+def _yaml_sheet_exists(sheet_id, sheet_range):
+    prefix = sheet_range.split('!')[0]
+    for row in registry.load_table('gsheet_export'):
+        if row.get('sheet_id') == sheet_id and str(row.get('sheet_range', '')).startswith(prefix):
+            return True
+    return False
+
+
+def insert_to_gsheet_export_yaml(env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method):
+    job_group = str(job_group).split(',')[0] if job_group else job_group
+    business_unit = str(business_unit).split(',')[0] if business_unit else business_unit
+    if execution_method == 'new-table':
+        if _yaml_sheet_exists(sheet_id, sheet_range):
+            print("This Sheet is already present in the YAML registry — proceeding to DAG/crawler steps")
+            return
+        registry.insert('gsheet_export', {
+            'source': 'gsheet',
+            'sheetname': new_table_name,
+            'sheet_id': sheet_id,
+            'sheet_range': sheet_range,
+            'target_s3_bucket': f'{datalake_bucket_prefix}-{env}',
+            'target_s3_prefix': 'raw/fileupload/source=gsheet',
+            'business_unit': business_unit,
+            'active_flag': 'Y',
+            'job_group': job_group,
+        })
+        print("Inserted gsheet_export row into YAML registry")
+    elif execution_method == 'new-column':
+        prefix = sheet_range.split('!')[0]
+        rows = registry.load_table('gsheet_export')
+        updated = 0
+        for row in rows:
+            if row.get('sheet_id') == sheet_id and str(row.get('sheet_range', '')).startswith(prefix):
+                row['sheet_range'] = sheet_range
+                updated += 1
+        registry.save_table('gsheet_export', rows)
+        if not updated:
+            raise ValueError("Sheet not present in the YAML registry: " + prefix)
+        print("Updated sheet_range in YAML registry")
+    else:
+        raise Exception("Invalid execution method")
+
+
 def insert_to_gsheet_export(env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method):
+    if registry.backend_mode() == 'yaml':
+        return insert_to_gsheet_export_yaml(env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method)
     config_host, config_username, config_pass = prepare_connection_parameters(env)
     job_group = str(job_group).split(',')[0]
     business_unit = str(business_unit).split(',')[0]
@@ -150,7 +196,7 @@ def insert_to_gsheet_export(env, new_table_name, sheet_id, sheet_range, job_grou
 
 
 def get_env_variables():
-    aws_region = 'ap-southeast-1'
+    aws_region = region
     aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     aws_session_token = os.getenv('AWS_SESSION_TOKEN')

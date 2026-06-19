@@ -24,7 +24,7 @@ metabase:
 
 # ── AWS ─────────────────────────────────────────────────────────────────────
 aws:
-  region: ap-southeast-1
+  region: <aws_region>
   script_bucket: <datalake-script-bucket>        # s3://<bucket>/transformations/<schema>/<table>.sql
   athena_results_bucket: <athena-results-bucket>
   athena_workgroups: [primary, bi-prod]          # tried in order on access error

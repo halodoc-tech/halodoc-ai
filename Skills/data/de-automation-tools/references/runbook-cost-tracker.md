@@ -183,7 +183,7 @@ Use `mcp__awslabs-aws-api__call_aws` with the parameters below. Run **twice** �
 | Contains `DPU-Hour` | Glue job compute units — `UsageQuantity` = DPU-hours |
 | Contains `DataScanned` | Athena bytes scanned — `UsageQuantity` = TB |
 | Contains `Node:` | Managed node (Redshift, EMR, etc.) — `UsageQuantity` = node-hours |
-| Starts with region prefix (`APS1-`) | Same as above, just region-qualified for ap-southeast-1 |
+| Starts with a region prefix (e.g. `APS1-`) | Same as above, just region-qualified |
 
 **Workflow for any cost question:**
 

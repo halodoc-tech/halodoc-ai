@@ -26,6 +26,18 @@ bucket prefix, Redshift cluster, etc.).
 By default each component finds `config.yml` by walking up from its own folder.
 To point elsewhere, set `DE_CONFIG_PATH=/abs/path/to/config.yml`.
 
+### Registry backend (`backend.mode`)
+
+`dms_automation`, `gsheet_onboarding`, and `transactional` keep state (registered
+endpoints, sheets, onboarded tables) in a **registry**:
+
+- **`yaml`** (default) — local YAML files under `backend.registry_dir` (see `../registry/`).
+  No database. The AWS actions (DMS full-load, Glue crawler, MWAA DAG trigger) still run;
+  only the registry is local. This is the standalone, shareable path.
+- **`datalake_config`** — the original internal mode that reads/writes a MySQL metadata DB.
+
+See `../registry/README.md` for the YAML file shapes (copy `*.example.yml` → `*.yml`).
+
 ## 3. Secrets — environment variables
 
 Set only what the component you run needs:

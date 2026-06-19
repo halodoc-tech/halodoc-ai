@@ -1,0 +1,17 @@
+# Onboarded tables. Written by transactional. 'schedule' is the run cadence
+# (free-form — minutes, a cron string, or whatever your DAG expects).
+- src_dbname: sales
+  src_schemaname: sales
+  src_tablename: orders
+  tgt_dbname: sales_dwh
+  tgt_schemaname: sales
+  tgt_tablename: orders
+  incremental_key: updated_at
+  partition_key: null
+  schedule: 360
+  load_type: full-load
+  status: ready
+  tgt_schema_definition:
+    id: long
+    amount: double
+    updated_at: timestamp
