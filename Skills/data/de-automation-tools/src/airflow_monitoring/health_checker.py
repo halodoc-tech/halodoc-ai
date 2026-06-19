@@ -203,7 +203,7 @@ def main():
             print("Dags with Import Errors: ")
             print(error_dags)
             MESSAGE = f":monit-alert:{error_count} DAG Import Error found in airflow:monit-alert:\n```{error_dags}```"
-            send_gchat_alert(MESSAGE)
+            send_alert(MESSAGE)
         else:
             print("Import Errors resolved within a minute")
     else:

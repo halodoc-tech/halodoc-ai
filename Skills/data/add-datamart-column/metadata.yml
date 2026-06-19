@@ -7,10 +7,10 @@
 # ─────────────────────────────────────────────────────────────────────────
 
 tables:
-  - name: fact_consultation
+  - name: fact_orders
     schema: dim_fact
     type: dim_fact
     columns:                       # existing columns (name: redshift_type)
-      consultation_id: bigint
-      doctor_id: bigint
+      order_id: bigint
+      product_id: bigint
       created_at: timestamp

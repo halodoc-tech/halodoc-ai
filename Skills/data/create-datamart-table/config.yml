@@ -52,6 +52,7 @@ datalake_config:
 # introspect    : how to read the source schema — athena | metabase
 table_types:
   dim_fact:         { schema_folder: dim_fact,         introspect: athena }
+  dim_fact_new_dag: { schema_folder: dim_fact,         introspect: athena }
   monetization_dwh: { schema_folder: monetization_dwh, introspect: athena }
   report_layer:     { schema_folder: report_layer,     introspect: athena }
   nrt_table:        { schema_folder: nrt_table,         introspect: athena }

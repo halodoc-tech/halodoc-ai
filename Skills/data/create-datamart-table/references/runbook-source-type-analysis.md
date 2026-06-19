@@ -90,7 +90,7 @@ Use the following rules to validate or override user-provided types:
 |---|---|
 | Source is `varchar(n)` | Use same `varchar(n)` — never smaller; only go larger if SQL expression can expand output |
 | Source is `char(n)` fixed | Use `varchar(n)` (Redshift pads fixed char) |
-| Column name is UUID-like (id, entity_id, patient_id…) | `varchar(36)` |
+| Column name is UUID-like (id, entity_id, customer_id…) | `varchar(36)` |
 | Column name is status/type/enum/channel | `varchar(50)`–`varchar(100)` — pick based on known max value length |
 | Column name is name/reason/error/label/utm_* | `varchar(255)` |
 | Column name is url/path | `varchar(500)` — URLs can be long but are bounded; do not default to MAX |

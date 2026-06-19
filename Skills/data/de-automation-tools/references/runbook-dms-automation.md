@@ -168,7 +168,7 @@ SOURCE_DB_USER:
   <your-dms-db-user>
 
 SOURCE_DB_HOST:
-  mydb.<cluster-id>.ap-southeast-1.rds.amazonaws.com
+  mydb.<cluster-id>.<aws_region>.rds.amazonaws.com
 
 SOURCE_DB_PORT:
   <port>
@@ -320,11 +320,3 @@ WHERE schema_name = %s
 | `DbConnectionError` | DB connection | Raised, stops execution |
 | Connection test timeout (300s) | `test_connection()` | Raises exception |
 | `ClientError` | boto3 DMS | Caught, prints error |
-
----
-
-## Tests
-
-`tests/dms_automation/`
-- `test_vault_client.py` — Vault credential retrieval with retry/backoff
-- `test_db_connection.py` — Context manager, `DbConnectionError`, fetch helpers

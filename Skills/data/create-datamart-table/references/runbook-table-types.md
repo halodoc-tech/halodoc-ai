@@ -53,7 +53,7 @@ Athena/PySpark (source)
   "incremental_key": "created_at",
   "business_key": "id",
   "dependency_type": "strong",
-  "table_dependencies": "[{'table_name': 'dwh.fact_cd_consultation', 'is_skip_allowed': 'False'}]",
+  "table_dependencies": "[{'table_name': 'dwh.fact_orders', 'is_skip_allowed': 'False'}]",
   "business_key_allow_duplicates": "0",
   "uniqueness_columns_if_allow_duplicates": "NULL"
 }
@@ -74,7 +74,7 @@ Athena/PySpark (source)
   "business_key": "order_id",
   "table_dependencies": "[{'table_name': 'mai.order'}]",
   "table_type": "facts",
-  "business_unit": "b2b",
+  "business_unit": "sales",
   "queue_group": "g0",
   "business_key_allow_duplicates": "0",
   "uniqueness_columns_if_allow_duplicates": "NULL"
@@ -100,7 +100,7 @@ Athena/PySpark (source)
   "business_key": "order_item_id",
   "table_dependencies": "[{'table_name': 'oms.orders'}, {'table_name': 'oms.order_item'}]",
   "table_type": "facts",
-  "business_unit": "pd",
+  "business_unit": "operations",
   "queue_group": "g0",
   "business_key_allow_duplicates": "0",
   "uniqueness_columns_if_allow_duplicates": "NULL"
@@ -117,8 +117,8 @@ Athena/PySpark (source)
 
 ```json
 {
-  "incremental_key": "tpa_client_reason_codes_updated_at",
-  "business_key": "tpa_client_reason_codes_id",
+  "incremental_key": "order_status_codes_updated_at",
+  "business_key": "order_status_codes_id",
   "table_dependencies": "[{'table_name': 'source_db.example_table'}]",
   "table_type": "dimensions",
   "business_unit": "marketing",

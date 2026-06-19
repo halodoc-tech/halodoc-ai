@@ -8,7 +8,7 @@ Ask only what cannot be auto-discovered. Collect in **one message**.
 
 | Field | Ask when | Notes |
 |---|---|---|
-| `table_name` | Always | lowercase, underscores, e.g. `fact_doctor_consultations` |
+| `table_name` | Always | lowercase, underscores, e.g. `fact_orders` |
 | `table_type` | Always | `dim_fact` · `dim_fact_new_dag` · `presentations` · `monetization` · `monetization_dwh` · `report_layer` · `nrt_table` |
 | `business_unit` | `dim_fact`, `dim_fact_new_dag`, `monetization_dwh` only | |
 | `schedule` | `presentations`, `monetization`, `report_layer`, `nrt_table`, `dim_fact_new_dag` | Ask in WIB — convert to UTC internally |
@@ -125,9 +125,9 @@ Show all auto-discovered and defaulted values. Wait for user approval before pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PROPOSED CONFIGURATION — please confirm or correct
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Source SQL          : facts/fact_prescription_upload.sql ✅ found
+Source SQL          : facts/fact_orders.sql ✅ found
 incremental_key     : updated_at                         (auto)
-business_key        : prescription_upload_id             (auto)
+business_key        : order_id             (auto)
 table_dependencies  : [dwh.dim_user, dwh.dim_product]    (from SQL JOINs)
 queue_group         : g0                                 (default)
 business_key_allow_duplicates : 0                        (default)
@@ -211,9 +211,9 @@ Use the exact template from `runbook-table-types.md` for the table_type. **No ex
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VALIDATION SUMMARY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ table_name: fact_doctor_consultations — new
-✅ business_unit: telemedicine — found
-✅ dependency dwh.dim_doctor — exists
+✅ table_name: fact_orders — new
+✅ business_unit: sales — found
+✅ dependency dwh.dim_product — exists
 ⚠️  fee decimal(10,2) — confirm precision
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -221,7 +221,7 @@ JENKINS PARAMETERS — copy into UI
 Jobs: StageDatamartTableCreation → verify → ProdDatamartTableCreation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-table_name:        fact_doctor_consultations
+table_name:        fact_orders
 table_type:        dim_fact
 cross_dependency:  no
 

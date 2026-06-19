@@ -97,14 +97,14 @@ The automation maps each type to its encoding internally. The table below shows 
 ```json
 {
   "schema": {
-    "doctor_id": "bigint",
-    "doctor_name": "VARCHAR(256)",
-    "specialty": "VARCHAR(128)",
+    "product_id": "bigint",
+    "product_name": "VARCHAR(256)",
+    "category": "VARCHAR(128)",
     "is_active": "boolean",
     "created_at": "timestamp",
     "updated_at": "timestamp"
   },
-  "distkey": "doctor_id",
+  "distkey": "product_id",
   "sortkey": "updated_at"
 }
 ```

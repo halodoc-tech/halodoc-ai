@@ -3,3 +3,6 @@ boto3
 requests
 pytz
 PyYAML
+psycopg2-binary
+gspread
+google-auth
