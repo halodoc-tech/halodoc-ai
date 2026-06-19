@@ -1,7 +1,7 @@
 # Airflow Monitoring
 
 Monitors MWAA (Managed Workflows for Apache Airflow) health and DAG import errors, then raises
-alerts (stdout + CSV, and an optional webhook) if issues persist after a 60-second re-check.
+alerts (stdout + CSV, and an optional webhook) if issues persist after a re-check.
 Health snapshots are written to a CSV — no database required.
 
 **Entry point:** `src/airflow_monitoring/health_checker.py`
@@ -46,15 +46,15 @@ Returns: `(error_count, [dag_names])`
 
 ```
 1. checkInstanceHealth()
-   └─ If unhealthy → wait 60s → check again
+   └─ If unhealthy → wait 150s → re-check (up to 2 times)
       └─ Still unhealthy → send_alert()
 
 2. checkImportErrors()
-   └─ If errors → wait 60s → check again
-      └─ Still errors → send_gchat_alert()
+   └─ If errors → wait 60s → re-check
+      └─ Still errors → send_alert()
 ```
 
-Alerts fire **only** when the issue persists after the 60s re-check — avoids false positives.
+Alerts fire **only** when the issue persists after the re-check — avoids false positives.
 
 ---
 
@@ -98,14 +98,3 @@ components = {'Metadatabase', 'Scheduler', 'Triggerer', 'Dagprocessor'}
 | Health check always unhealthy | MWAA instance down | Check AWS Console for MWAA status |
 | Import errors not caught | Error timestamp > 1 hour old | By design — only recent errors trigger alert |
 | Webhook alert not sent | `ALERT_WEBHOOK_URL` unset | Set it, or check stdout / `airflow_alerts.csv` |
-
----
-
-## Tests
-
-`tests/airflow_monitoring/test_health_checker.py`
-- Web token creation (success, invalid env, HTTP errors)
-- Session info retrieval (success, exceptions, login failures)
-- Instance health checks (all healthy, partial failures)
-- Import error detection (new errors, old errors skipped)
-- Main orchestration: alert triggered only when double-check still fails

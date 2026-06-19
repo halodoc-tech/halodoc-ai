@@ -61,7 +61,7 @@ See `runbook-table-types.md` for exact required keys per table_type.
   - WIB 12:00 → UTC `0 5 * * *`
 
 **Reference:** Check existing schedules using Metabase:
-https://<metabase-internal-host>/question/<card-id>-dimensinal-model-monitor
+https://<metabase-internal-host>/question/<card-id>-table-monitor
 
 ---
 
@@ -74,12 +74,12 @@ https://<metabase-internal-host>/question/<card-id>-dimensinal-model-monitor
 
 **Valid format:**
 ```
-"[{'table_name': 'dwh.fact_cd_consultation', 'is_skip_allowed': 'False'}]"
+"[{'table_name': 'dwh.fact_orders', 'is_skip_allowed': 'False'}]"
 ```
 
 **Invalid formats (reject these):**
 ```
-"dwh.fact_cd_consultation, dwh.dim_doctor"  ← comma-separated string, not a list
+"dwh.fact_orders, dwh.dim_product"  ← comma-separated string, not a list
 "[test.syntax, test.invalid"                ← not parseable
 "[]"                                         ← empty list not allowed
 ```

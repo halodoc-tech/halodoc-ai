@@ -12,25 +12,25 @@
 # ─────────────────────────────────────────────────────────────────────────
 
 tables:
-  - name: fact_consultation          # target datamart table name
+  - name: fact_orders          # target datamart table name
     schema: dim_fact                 # target schema (matches a table_types schema_folder)
     type: dim_fact                   # one of config.yml table_types keys
-    business_unit: teleconsultation
+    business_unit: sales
     dependencies:                    # other table names that must run first
-      - dim_doctor
-      - dim_patient
+      - dim_product
+      - dim_customer
     columns:                         # source/target columns (name: redshift_type)
-      consultation_id: bigint
-      doctor_id: bigint
-      patient_id: bigint
+      order_id: bigint
+      product_id: bigint
+      customer_id: bigint
       created_at: timestamp
       status: "varchar(64)"
 
-  # - name: dim_doctor
+  # - name: dim_product
   #   schema: dim_fact
   #   type: dim_fact
-  #   business_unit: teleconsultation
+  #   business_unit: sales
   #   dependencies: []
   #   columns:
-  #     doctor_id: bigint
-  #     doctor_name: "varchar(256)"
+  #     product_id: bigint
+  #     product_name: "varchar(256)"

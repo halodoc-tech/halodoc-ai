@@ -7,7 +7,7 @@ description: >
   "rds via dms", "add column to rds-migrated table", "add column to dms-migrated table",
   "TransactionTableOnboarding", "dms automation", "dms endpoint",
   "dms replication task", "DMSAutomation", "setup dms for schema", "onboard schema to dms",
-  "gsheet onboarding", "onboard google sheet", "GsheetIngestionAutomation", "add new sheet",
+  "gsheet onboarding", "onboard google sheet", "load google sheet to redshift", "gsheet to redshift",
   "update sheet range", "cost tracker", "WeeklyCostTrackerAutomation", "de metrics",
   "airflow monitoring", "mwaa monitoring", "mwaa health check", "de-automation-tools",
   "de automation tools".

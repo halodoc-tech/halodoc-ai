@@ -283,9 +283,3 @@ hudi_parallelism  frequency_in_mins  job_group  clustering_enabled  enable_hudi_
 | `dag_variable_enum_validator` fails | Invalid `JobGroup` or `Frequency` | Check valid values in `datalake_config.dag_variable` |
 | Wrong type in `schema_doc` | Unsupported MySQL type | Add mapping in `map_data_type()` |
 | Vault 403 error | Expired token | Refresh `VAULT_STAGE_TOKEN` or `VAULT_PROD_TOKEN` |
-
----
-
-## Tests
-
-`tests/transactional_table_migration_automation/`
