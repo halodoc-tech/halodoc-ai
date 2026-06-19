@@ -1,5 +1,10 @@
 # Cost Tracker Automation
 
+> **Note:** The bundled `src/cost_tracker_automation/` is a **simplified, generic** version —
+> it reports AWS Cost Explorer spend per service for the previous week (optionally filtered by a
+> CostCenter tag). The rest of this runbook documents the fuller original design (S3 / CloudWatch /
+> Redshift metrics written to `de_metrics`), kept as a reference for extending the code.
+
 Aggregates last week's (Sunday–Saturday) AWS infrastructure costs and performance metrics into
 `datalake_config.de_metrics`. Runs weekly via Jenkins — no parameters required.
 
