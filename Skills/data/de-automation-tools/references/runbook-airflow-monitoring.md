@@ -1,7 +1,8 @@
 # Airflow Monitoring
 
-Monitors MWAA (Managed Workflows for Apache Airflow) health and DAG import errors, then fires
-alerts via Google Chat and Slack if issues persist after a 60-second re-check.
+Monitors MWAA (Managed Workflows for Apache Airflow) health and DAG import errors, then raises
+alerts (stdout + CSV, and an optional webhook) if issues persist after a 60-second re-check.
+Health snapshots are written to a CSV — no database required.
 
 **Entry point:** `src/airflow_monitoring/health_checker.py`
 
@@ -13,8 +14,8 @@ alerts via Google Chat and Slack if issues persist after a 60-second re-check.
 src/airflow_monitoring/
   health_checker.py         # Main logic + entry point
   utils/
-    alert_notification.py  # send_gchat_alert(), send_slack_alert()
-    variables.py           # MWAA env names, component names
+    alert_notification.py  # send_alert() — stdout + CSV + optional webhook
+    variables.py           # MWAA env names, region, component names
 ```
 
 ---
@@ -46,7 +47,7 @@ Returns: `(error_count, [dag_names])`
 ```
 1. checkInstanceHealth()
    └─ If unhealthy → wait 60s → check again
-      └─ Still unhealthy → send_gchat_alert()
+      └─ Still unhealthy → send_alert()
 
 2. checkImportErrors()
    └─ If errors → wait 60s → check again
@@ -57,16 +58,13 @@ Alerts fire **only** when the issue persists after the 60s re-check — avoids f
 
 ---
 
-## Alert Channels
+## Alerting (`send_alert(message)` in `alert_notification.py`)
 
-**Google Chat** (`send_gchat_alert(message)` in `alert_notification.py`):
-- Hardcoded webhook URL
-- POST with `{"text": message}`
-
-**Slack** (`send_slack_alert(message)` in `alert_notification.py`):
-- Uses `slack_sdk` WebClient
-- Channel: `C02BM4FDJTG` (`<alerts-channel>`)
-- Token from `SLACK_BOT_TOKEN` env var
+Generic, no provider credentials hard-coded:
+- Always prints the alert and appends it to `airflow_alerts.csv`
+- If `ALERT_WEBHOOK_URL` is set, also POSTs `{"text": message}` — works with both
+  Slack and Google Chat incoming webhooks
+- Health snapshots are written to `airflow_health.csv` each run (`write_health_snapshot`)
 
 ---
 
@@ -84,7 +82,8 @@ components = {'Metadatabase', 'Scheduler', 'Triggerer', 'Dagprocessor'}
 
 | Variable | Required | Description |
 |---|---|---|
-| `SLACK_BOT_TOKEN` | For Slack alerts | Slack SDK bot token |
+| `ALERT_WEBHOOK_URL` | Optional | Incoming webhook to POST alerts to (Slack/Google Chat); omit for stdout + CSV only |
+| `ALERT_CSV_PATH` / `HEALTH_CSV_PATH` | Optional | Override the alert / health-snapshot CSV paths |
 
 (Standard common env vars — `Environment`, `AWS_ACCESS_KEY_ID`, etc. — also required.)
 
@@ -98,7 +97,7 @@ components = {'Metadatabase', 'Scheduler', 'Triggerer', 'Dagprocessor'}
 | JWT token missing | Login POST failed | Check AWS credentials are valid |
 | Health check always unhealthy | MWAA instance down | Check AWS Console for MWAA status |
 | Import errors not caught | Error timestamp > 1 hour old | By design — only recent errors trigger alert |
-| Slack alert not sent | `SLACK_BOT_TOKEN` missing | Set the env var |
+| Webhook alert not sent | `ALERT_WEBHOOK_URL` unset | Set it, or check stdout / `airflow_alerts.csv` |
 
 ---
 

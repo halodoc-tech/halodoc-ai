@@ -17,6 +17,7 @@ _C = _load()
 
 stage_airflow_env_name = _C["airflow"]["stage_env_name"]
 prod_airflow_env_name = _C["airflow"]["prod_env_name"]
+region = _C["aws"]["region"]
 components = {'Metadatabase': 'not_healthy',
               'Scheduler': 'not_healthy',
               'Triggerer': 'not_healthy',

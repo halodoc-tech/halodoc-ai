@@ -54,11 +54,12 @@ databases:
     port:       3306
     db_name:    datalake_config
 
-# ── Cost tracker (weekly AWS cost-by-service report) ────────────────────────
+# ── Cost tracker (weekly AWS cost-by-service report → CSV) ──────────────────
 cost_tracker:
   timezone: UTC                  # week window is computed in this tz
   cost_center_tag_key: ""        # optional Cost Explorer tag filter; blank = no filter
   cost_center_tag_values: []     # e.g. ["DE", "DE-DS"]
+  csv_path: ""                   # optional output path; blank = cost_by_service_<start>_to_<end>.csv
 
 # ── DMS endpoints + replication instances, per env ──────────────────────────
 dms:
