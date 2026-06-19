@@ -29,6 +29,8 @@ aws:
   # Vault path pattern for DMS source DB creds. {prefix} = host part before first '.'
   vault_path_pattern: "datalake/dms/mysql/{prefix}"
   raw_bucket: <datalake-raw-bucket>        # gsheet/raw landing bucket
+  # Bucket-name prefix for the datalake S3 buckets, per env -> "<prefix>-<env>".
+  datalake_bucket_prefix: <datalake-bucket-prefix>
 
 # ── Airflow / MWAA ──────────────────────────────────────────────────────────
 airflow:
@@ -36,9 +38,55 @@ airflow:
   prod_env_name:  <prod-airflow-env-name>
   alerts_channel: <alerts-channel>         # Google Chat / Slack channel for health alerts
 
-# ── Redshift (cost tracker) ─────────────────────────────────────────────────
-redshift:
-  cluster_name: <redshift-cluster-name>    # referenced by the cost tracker
+# ── Vault (HashiCorp) base URLs — secrets/tokens stay in env vars ───────────
+vault:
+  stage_base_url: <vault-stage-base-url>   # e.g. https://vault-stage.example.com
+  prod_base_url:  <vault-prod-base-url>    # e.g. https://vault.example.com
+
+# ── Databases (runtime — used by the bundled src/ code) ─────────────────────
+# Passwords/tokens are NEVER stored here — they come from env vars (see src/README.md).
+databases:
+  datalake_config:
+    stage_host: <datalake-config-stage-host>
+    prod_host:  <datalake-config-prod-host>
+    stage_user: <rds-user>
+    prod_user:  <rds-user>
+    port:       3306
+    db_name:    datalake_config
+  redshift:
+    host:    <redshift-host>
+    port:    5439
+    db_name: <redshift-db>
+    user:    <redshift-user>
+    cluster_name: <redshift-cluster-name>  # cluster id for CloudWatch metrics
+
+# ── DMS endpoints + replication instances, per env ──────────────────────────
+dms:
+  stage:
+    full_load_endpoint_id: <stage-full-load-endpoint-id>
+    incr_load_endpoint_id: <stage-incr-load-endpoint-id>
+    full_load_instance_id: <stage-full-load-instance-id>
+    incr_load_instance_id: <stage-incr-load-instance-id>
+    full_load_replication_instance_arn: "arn:aws:dms:ap-southeast-1:<STAGE_ACCOUNT_ID>:rep:<stage-rep-id>"
+  prod:
+    full_load_endpoint_id: <prod-full-load-endpoint-id>
+    incr_load_endpoint_id: <prod-incr-load-endpoint-id>
+    full_load_instance_id: <prod-full-load-instance-id>
+    incr_load_instance_id: <prod-incr-load-instance-id>
+    full_load_replication_instance_arn: "arn:aws:dms:ap-southeast-1:<PROD_ACCOUNT_ID>:rep:<prod-rep-id>"
+
+# ── Transactional migration constants ───────────────────────────────────────
+transactional:
+  migration_type:         full-load
+  upscale_instance_class: dms.t3.large
+  down_instance_class:    dms.t3.small
+  dag_name:               <full-load-dag-name>
+
+# ── GSheet onboarding (Glue crawler + ingestion DAG names) ──────────────────
+gsheet:
+  stage_crawler_name: <stage-gsheet-crawler>
+  prod_crawler_name:  <prod-gsheet-crawler>
+  dag_name:           <gsheet-ingest-dag-name>
 
 # ── Jenkins jobs (exact names — the real engines) ───────────────────────────
 jenkins:

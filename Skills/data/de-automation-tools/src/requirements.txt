@@ -1,0 +1,11 @@
+mysql-connector-python
+boto3
+requests
+apache-airflow==3.0.6
+# for Unit Tests
+coverage==7.3.3
+ruff==0.1.14
+pytest==8.3.2
+slack_sdk==3.31.0
+pytz
+PyYAML

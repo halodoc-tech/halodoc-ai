@@ -1,0 +1,6 @@
+mysql-connector-python
+boto3
+requests
+psycopg2-binary==2.9.8
+pytz
+apache-airflow==3.0.6

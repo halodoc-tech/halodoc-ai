@@ -31,6 +31,9 @@ datalake_config names) come from there. See `PREREQUISITES.md` for required back
 them and asks the user to supply/confirm values manually (for environments with no
 datalake_config DB).
 
+**Runnable source** for all five components lives in `src/` (config-driven by `config.yml`).
+See `src/README.md` to install and run; the runbooks under `references/` document each one.
+
 ## Skill disambiguation
 
 | Intent | Correct skill |

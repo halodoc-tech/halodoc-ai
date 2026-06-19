@@ -20,8 +20,16 @@ airflow monitoring) and **generates Jenkins parameters**. Jenkins jobs do the wo
    - `datalake_config` — run live pre-checks via Metabase MCP.
    - `none` — skip live pre-checks; the skill asks you to supply/confirm values manually.
 
+## Run the code
+
+The runnable, config-driven source for all five components lives in [`src/`](src/) —
+see [`src/README.md`](src/README.md) for install, the env vars to set, and how to run
+each component. Every component reads `config.yml`, so once you fill it the code runs
+from your machine (`python main.py`); no Jenkins required.
+
 ## Honest scope
 
-This is the **least portable** skill — it orchestrates DMS, MWAA, Vault, and Athena, all AWS-specific.
-Outside an AWS data-lake stack, treat the runbooks as reference patterns. Cost tracker assumes
-AWS Cost Explorer + CloudWatch with a `CostCenter` tag.
+This is the **most AWS-coupled** skill — it orchestrates DMS, MWAA, Vault, and Athena.
+The bundled `src/` is fully generic (no hard-coded hosts/accounts/buckets) but still
+assumes an AWS data-lake stack. Cost tracker assumes AWS Cost Explorer + CloudWatch with
+a `CostCenter` tag and an S3 bucket inventory you customize in `metrics_dictionary.py`.

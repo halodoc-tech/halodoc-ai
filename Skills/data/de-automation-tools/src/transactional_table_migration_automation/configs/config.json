@@ -1,0 +1,32 @@
+{
+  "stage": {
+    "host":"<source-mysql-host>",
+    "user": "readonly",
+    "password": "",
+    "src_dbname": "",
+    "port": 3306,
+    "schema_list": [
+      {
+        "schema_name": "",
+        "tgt_dbname": "",
+        "tgt_tbl_name": []
+      }
+    ]
+  },
+  "prod": {
+    "host":"<source-mysql-host>",
+    "user": "readonly",
+    "password": "",
+    "port": 3306,
+    "src_dbname": "",
+    "schema_list": [
+      {
+        "schema_name": "",
+        "tgt_dbname": "",
+        "tgt_tbl_name": [
+
+        ]
+      }
+    ]
+  }
+}
