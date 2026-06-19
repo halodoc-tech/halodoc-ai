@@ -32,8 +32,8 @@ To point elsewhere, set `DE_CONFIG_PATH=/abs/path/to/config.yml`.
 endpoints, sheets, onboarded tables) in a **registry**:
 
 - **`yaml`** (default) — local YAML files under `backend.registry_dir` (see `../registry/`).
-  No database. The AWS actions (DMS full-load, Glue crawler, MWAA DAG trigger) still run;
-  only the registry is local. This is the standalone, shareable path.
+  No database. The AWS actions (DMS full-load, MWAA DAG trigger) and the gsheet→Redshift
+  load still run; only the registry is local. This is the standalone, shareable path.
 - **`datalake_config`** — the original internal mode that reads/writes a MySQL metadata DB.
 
 See `../registry/README.md` for the YAML file shapes (copy `*.example.yml` → `*.yml`).

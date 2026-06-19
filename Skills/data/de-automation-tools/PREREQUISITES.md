@@ -7,7 +7,8 @@ airflow monitoring) and **generates Jenkins parameters**. Jenkins jobs do the wo
 
 | Requirement | Why | If you don't have it |
 |---|---|---|
-| **Jenkins jobs** `TransactionTableOnboarding`, `DMSAutomation`, `GsheetIngestionAutomation`, `WeeklyCostTrackerAutomation` | Consume the generated params | Skill still emits the param block; apply manually |
+| **Jenkins jobs** `TransactionTableOnboarding`, `DMSAutomation`, `WeeklyCostTrackerAutomation` | Consume the generated params | Skill still emits the param block; apply manually |
+| **Redshift** + **Google service account** (gsheet loader) | Load sheets directly into Redshift via `psycopg2` | Required for the gsheet→Redshift component |
 | **AWS DMS** + **S3** + **Athena** | RDS→S3 replication; Athena reads the S3 data | Transactional-migration path is N/A without DMS |
 | **HashiCorp Vault** at `vault_path_pattern` | DMS source-DB creds | Supply creds another way |
 | **MWAA** (managed Airflow) | airflow-monitoring + cost DAG-run metrics | Monitoring path N/A |
