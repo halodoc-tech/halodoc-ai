@@ -13,7 +13,7 @@ cp rds_endpoints.example.yml rds_endpoints.yml
 | File | Written by | Replaces |
 |---|---|---|
 | `rds_endpoints.yml` | dms_automation (insert), read by transactional | `datalake_config.rds_endpoints` |
-| `gsheet_export.yml` | gsheet_onboarding | `datalake_config.gsheet_export` |
+| `gsheet_targets.yml` | gsheet_onboarding | tracks each sheet→Redshift load |
 | `transformation_master.yml` | transactional | `datalake_config.transformation_master` |
 | `watermark.yml` | transactional | `datalake_config.watermark` |
 

@@ -44,7 +44,7 @@ See `src/README.md` to install and run; the runbooks under `references/` documen
 | Create a new **datamart** table (Athena → Redshift, or Redshift → Redshift) | `create-datamart-table` skill |
 | Add column to an existing **Redshift** table | `add-datamart-column` skill |
 | Set up DMS replication endpoint or task | **this skill** — `DMSAutomation` |
-| Onboard a Google Sheet to the datalake | **this skill** — `GsheetIngestionAutomation` |
+| Load a Google Sheet into a Redshift table | **this skill** — gsheet→Redshift loader (`src/gsheet_onbording_automation`) |
 
 ## Tools
 
@@ -59,7 +59,7 @@ See `src/README.md` to install and run; the runbooks under `references/` documen
 |---|---|---|
 | `references/runbook-transactional-migration.md` | TransactionTableOnboarding | User asks to onboard an RDS table to S3 via DMS (Athena-readable), or add a column to a DMS-migrated Athena table |
 | `references/runbook-dms-automation.md` | DMSAutomation | User asks to set up DMS, create an endpoint, or modify a replication task |
-| `references/runbook-gsheet-onboarding.md` | GsheetIngestionAutomation | User asks to onboard a Google Sheet or update a sheet range |
+| `references/runbook-gsheet-onboarding.md` | GSheet → Redshift loader | User asks to load a Google Sheet into a Redshift table |
 | `references/runbook-cost-tracker.md` | WeeklyCostTrackerAutomation | User asks about DE costs, week-over-week changes, or what drove an increase |
 | `references/runbook-airflow-monitoring.md` | Airflow Monitoring | User asks about MWAA health, DAG success rates, or airflow monitoring alerts |
 | `references/runbook-getting-started.md` | All components | User is new to the repo or asks what each component does |
@@ -81,5 +81,5 @@ See `src/README.md` to install and run; the runbooks under `references/` documen
 - **Jenkins job names** — use the names from `config.yml` `jenkins.*` (defaults below)
 - **`new-column-*` (transactional migration)** — only 5 params needed (`Environment`, `ExecutionMethod`, `SchemaName`, `TargetDbName`, `TableNames`); do NOT ask for `JobGroup`, `Frequency`, `PartitionColumn`, or `IncrementalKey`
 - **Cost questions** — always determine week boundaries first (Step 1 in runbook); service-level diffs come from `de_metrics`; USAGE_TYPE attribution requires AWS MCP
-- **Jenkins job names are exact**: `TransactionTableOnboarding` · `DMSAutomation` · `GsheetIngestionAutomation` · `WeeklyCostTrackerAutomation`
+- **Jenkins job names are exact**: `TransactionTableOnboarding` · `DMSAutomation` · `WeeklyCostTrackerAutomation` (the gsheet→Redshift loader runs standalone — `python main.py`, no Jenkins)
 - **Stage before Prod** — always remind the user to run stage first for transactional migration and gsheet onboarding

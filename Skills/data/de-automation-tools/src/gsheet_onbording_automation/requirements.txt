@@ -1,3 +1,4 @@
-mysql-connector-python
-boto3
-requests
+gspread
+google-auth
+psycopg2-binary
+PyYAML

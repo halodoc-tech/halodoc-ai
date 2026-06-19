@@ -11,7 +11,7 @@
 #   datalake_config : a metadata DB (MySQL) — the original internal setup.
 #   yaml            : local YAML files under registry_dir — NO database needed.
 #                     Use this to run the tools standalone. AWS actions (DMS,
-#                     Glue, MWAA DAG triggers) still run; only the registry is local.
+#                     MWAA DAG triggers, Redshift loads) still run; only the registry is local.
 backend:
   mode: yaml                       # datalake_config | yaml
   registry_dir: registry           # folder (relative to this file) for the YAML registry
@@ -84,17 +84,36 @@ transactional:
   down_instance_class:    dms.t3.small
   dag_name:               <full-load-dag-name>
 
-# ── GSheet onboarding (Glue crawler + ingestion DAG names) ──────────────────
+# ── Redshift (gsheet loader target) ────────────────────────────────────────
+# Password comes from the REDSHIFT_PASSWORD env var, never here.
+redshift:
+  host:    <redshift-host>
+  port:    5439
+  db_name: <redshift-db>
+  user:    <redshift-user>
+
+# ── GSheet → Redshift loader ────────────────────────────────────────────────
+# Each target loads one sheet into one Redshift table via delete-insert upsert
+# on business_key. Omit `columns` to infer all columns from the sheet header as
+# VARCHAR; declare `columns` to pin types + restrict/order the loaded columns.
 gsheet:
-  stage_crawler_name: <stage-gsheet-crawler>
-  prod_crawler_name:  <prod-gsheet-crawler>
-  dag_name:           <gsheet-ingest-dag-name>
+  service_account_json: <path-to-google-service-account-json>  # or set GOOGLE_APPLICATION_CREDENTIALS
+  targets:
+    - sheet_id:      <your-google-sheet-id>
+      sheet_range:   Sheet1!A1:Z
+      target_schema: public
+      target_table:  sales_from_sheet
+      business_key:  [order_id]          # one or more columns; the merge key
+      columns:                            # optional — name: Redshift type
+        order_id:   BIGINT
+        amount:     "DECIMAL(18,2)"
+        status:     "VARCHAR(64)"
+        updated_at: TIMESTAMP
 
 # ── Jenkins jobs (exact names — the real engines) ───────────────────────────
 jenkins:
   transaction_onboarding: TransactionTableOnboarding
   dms_automation:         DMSAutomation
-  gsheet_ingestion:       GsheetIngestionAutomation
   weekly_cost_tracker:    WeeklyCostTrackerAutomation
 
 # ── datalake_config schema (used when backend.mode: datalake_config) ────────

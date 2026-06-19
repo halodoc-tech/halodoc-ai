@@ -1,0 +1,8 @@
+# Tracks each Google Sheet -> Redshift target the loader has run.
+# Written by gsheet_onboarding (yaml mode); the target spec itself lives in config.yml.
+- target_schema: public
+  target_table: sales_from_sheet
+  sheet_id: <your-google-sheet-id>
+  sheet_range: Sheet1!A1:Z
+  business_key: [order_id]
+  last_rows: 120

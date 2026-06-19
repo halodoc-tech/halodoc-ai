@@ -1,289 +1,157 @@
+"""
+Google Sheet -> Redshift loader.
+
+Reads a Google Sheet and loads it into a Redshift table with a delete-insert
+upsert on a business key (idempotent: rerunning replaces the matching rows).
+Targets are declared in config.yml under `gsheet.targets`.
+
+  Run all targets:        python main.py
+  Run one target:         TARGET_TABLE=<schema.table | table> python main.py
+
+Secrets / auth (env vars — never in config):
+  REDSHIFT_PASSWORD               Redshift password
+  GOOGLE_APPLICATION_CREDENTIALS  path to a Google service-account JSON
+                                  (or set gsheet.service_account_json in config.yml)
+"""
 import os
+import pathlib
+import sys
 
-import mysql.connector
-import boto3
+import gspread
+import psycopg2
+from psycopg2.extras import execute_values
+import yaml
 
-from configs.datalake_config_creds import *
-from sql_scripts.gsheet_export import *
-from utils.api import trigger_dag
-from utils.variables import *
 import registry
 
 
-def get_crawler_data_sources(glue, crawler_name):
-    try:
-        response = glue.get_crawler(Name=crawler_name)
-        return response['Crawler']['Targets']['S3Targets']
-    except Exception as e:
-        raise Exception(f"Failed to get the crawler data sources - {e}")
+def _config():
+    path = os.environ.get("DE_CONFIG_PATH")
+    if not path:
+        for parent in pathlib.Path(__file__).resolve().parents:
+            if (parent / "config.yml").exists():
+                path = parent / "config.yml"
+                break
+    with open(path) as handle:
+        return yaml.safe_load(handle) or {}
 
 
-def update_crawler(glue, new_s3_targets, crawler_name):
-    try:
-        response = glue.update_crawler(
-            Name=crawler_name,
-            Targets={
-                'S3Targets': new_s3_targets
-            }
-        )
-        if response['ResponseMetadata']['HTTPStatusCode'] == 200:
-            print(response)
-            print("Updated the crawler successfully")
-        else:
-            raise Exception(f"Response not received successfully")
-    except Exception as e:
-        raise Exception(f"Failed to update the crawler - {e}")
-
-
-def run_crawler(glue, crawler_name):
-    try:
-        response = glue.start_crawler(Name=crawler_name)
-        if response['ResponseMetadata']['HTTPStatusCode'] == 200:
-            print(response)
-            print("Crawler started successfully")
-        else:
-            raise Exception(f"Response not received successfully")
-    except Exception as e:
-        raise Exception(f"Failed to start the crawler - {e}")
-
-
-def gsheet_validator(cursor, sheet_range, sheet_id):
-    validation_query = '''
-    Select sheet_range from datalake_config.gsheet_export where sheet_range LIKE '{sheet_range}%' and sheet_id = '{sheet_id}';
-    '''.format(sheet_range=sheet_range.split('!')[0], sheet_id=sheet_id)
-    cursor.execute(validation_query)
-    if cursor.fetchone():
-        print("Sheet already present in the table")
-        return 1
+def read_sheet(sheet_id, sheet_range, sa_json):
+    """Return (header, rows) from a Google Sheet. sheet_range like 'Sheet1!A1:Z'."""
+    client = gspread.service_account(filename=sa_json)
+    spreadsheet = client.open_by_key(sheet_id)
+    if "!" in sheet_range:
+        ws_name, cell_range = sheet_range.split("!", 1)
+        values = spreadsheet.worksheet(ws_name).get(cell_range)
     else:
-        return 0
+        values = spreadsheet.sheet1.get_all_values()
+    if not values:
+        return [], []
+    return [c.strip() for c in values[0]], values[1:]
 
 
-def prepare_connection_parameters(env):
-    if env == 'stage':
-        config_host = DATALAKE_CONFIG_STAGE_HOST
-        config_username = DATALAKE_CONFIG_STAGE_USER
-        config_pass = os.getenv('DATALAKE_CONFIG_STAGE_PASSWORD')
-
-    elif env == 'prod':
-        config_host = DATALAKE_CONFIG_PROD_HOST
-        config_username = DATALAKE_CONFIG_PROD_USER
-        config_pass = os.getenv('DATALAKE_CONFIG_PROD_PASSWORD')
-    else:
-        raise Exception("Invalid environment")
-    return config_host, config_username, config_pass
+def ensure_table(cur, schema, table, columns, col_types):
+    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}";')
+    cols_ddl = ", ".join(f'"{c}" {col_types.get(c, "VARCHAR(65535)")}' for c in columns)
+    cur.execute(f'CREATE TABLE IF NOT EXISTS "{schema}"."{table}" ({cols_ddl});')
 
 
-def create_database_connection(host, username, password, env):
-    print(f"Connecting to datalake-config-{env} database")
-    try:
-        return mysql.connector.connect(
-            host=host,
-            user=username,
-            password=password
-        )
-    except Exception as e:
-        raise Exception("Failed to connect to the database")
-
-
-def handle_new_table(cursor, sheet_id, sheet_range, new_table_name, job_group, business_unit, env):
-    if gsheet_validator(cursor, sheet_range, sheet_id) == 0:
-        query = build_insert_query(new_table_name, sheet_id, sheet_range, job_group, business_unit, env)
-        execute_query(cursor, query)
-    else:
-        print("This Sheet is already present - ", "sheet_range.split('!')[0]")
-        print("Following the next step, Triggering the DAG")
-
-
-def handle_new_column(cursor, sheet_id, sheet_range):
-    if gsheet_validator(cursor, sheet_range, sheet_id) == 1:
-        query = build_update_query(sheet_range, sheet_id)
-        execute_query(cursor, query)
-    else:
-        raise ValueError("Sheet not present in the table: " + sheet_range.split('!')[0])
-
-
-def build_insert_query(new_table_name, sheet_id, sheet_range, job_group, business_unit, env):
-    return INSERT_INTO_GSHEET_EXPORT.format(
-        new_table_name=new_table_name,
-        sheet_id=sheet_id,
-        sheet_range=sheet_range,
-        job_group=job_group,
-        business_unit=business_unit,
-        env=env,
-        bucket_prefix=datalake_bucket_prefix
+def upsert(conn, schema, table, columns, business_key, rows):
+    """Delete-insert merge via a staging temp table (supports composite keys)."""
+    full = f'"{schema}"."{table}"'
+    col_list = ", ".join(f'"{c}"' for c in columns)
+    cur = conn.cursor()
+    cur.execute(f"CREATE TEMP TABLE stg (LIKE {full});")
+    execute_values(
+        cur,
+        f"INSERT INTO stg ({col_list}) VALUES %s",
+        [tuple(r[i] if i < len(r) else None for i in range(len(columns))) for r in rows],
     )
+    join_cond = " AND ".join(f'{full}."{k}" = stg."{k}"' for k in business_key)
+    cur.execute(f"DELETE FROM {full} USING stg WHERE {join_cond};")
+    cur.execute(f"INSERT INTO {full} ({col_list}) SELECT {col_list} FROM stg;")
+    cur.execute("DROP TABLE stg;")
+    conn.commit()
+    cur.close()
 
 
-def build_update_query(sheet_range, sheet_id):
-    return UPDATE_GSHEET_EXPORT.format(
-        sheet_range=sheet_range,
-        sheet_id=sheet_id,
-        tgt_sheet_name=sheet_range.split('!')[0]
-    )
+def run_target(rs_cfg, sa_json, target):
+    schema = target["target_schema"]
+    table = target["target_table"]
+    business_key = target["business_key"]
+    if isinstance(business_key, str):
+        business_key = [business_key]
+    col_types = target.get("columns") or {}
 
+    header, rows = read_sheet(target["sheet_id"], target["sheet_range"], sa_json)
+    if not header:
+        print(f"[{schema}.{table}] sheet is empty — skipping")
+        return
 
-def execute_query(cursor, query):
-    print(f"Executing query: {query}")
-    cursor.execute(query)
-
-
-def _yaml_sheet_exists(sheet_id, sheet_range):
-    prefix = sheet_range.split('!')[0]
-    for row in registry.load_table('gsheet_export'):
-        if row.get('sheet_id') == sheet_id and str(row.get('sheet_range', '')).startswith(prefix):
-            return True
-    return False
-
-
-def insert_to_gsheet_export_yaml(env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method):
-    job_group = str(job_group).split(',')[0] if job_group else job_group
-    business_unit = str(business_unit).split(',')[0] if business_unit else business_unit
-    if execution_method == 'new-table':
-        if _yaml_sheet_exists(sheet_id, sheet_range):
-            print("This Sheet is already present in the YAML registry — proceeding to DAG/crawler steps")
-            return
-        registry.insert('gsheet_export', {
-            'source': 'gsheet',
-            'sheetname': new_table_name,
-            'sheet_id': sheet_id,
-            'sheet_range': sheet_range,
-            'target_s3_bucket': f'{datalake_bucket_prefix}-{env}',
-            'target_s3_prefix': 'raw/fileupload/source=gsheet',
-            'business_unit': business_unit,
-            'active_flag': 'Y',
-            'job_group': job_group,
-        })
-        print("Inserted gsheet_export row into YAML registry")
-    elif execution_method == 'new-column':
-        prefix = sheet_range.split('!')[0]
-        rows = registry.load_table('gsheet_export')
-        updated = 0
-        for row in rows:
-            if row.get('sheet_id') == sheet_id and str(row.get('sheet_range', '')).startswith(prefix):
-                row['sheet_range'] = sheet_range
-                updated += 1
-        registry.save_table('gsheet_export', rows)
-        if not updated:
-            raise ValueError("Sheet not present in the YAML registry: " + prefix)
-        print("Updated sheet_range in YAML registry")
+    if col_types:
+        # declared schema wins: select + order columns by the declared spec
+        columns = list(col_types.keys())
+        pos = {h: i for i, h in enumerate(header)}
+        missing = [c for c in columns if c not in pos]
+        if missing:
+            sys.exit(f"[{schema}.{table}] declared columns missing from sheet header: {missing}")
+        rows = [[r[pos[c]] if pos[c] < len(r) else None for c in columns] for r in rows]
     else:
-        raise Exception("Invalid execution method")
+        # infer columns from the sheet header; all VARCHAR
+        columns = header
 
+    for key in business_key:
+        if key not in columns:
+            sys.exit(f"[{schema}.{table}] business_key '{key}' not in columns {columns}")
 
-def insert_to_gsheet_export(env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method):
-    if registry.backend_mode() == 'yaml':
-        return insert_to_gsheet_export_yaml(env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method)
-    config_host, config_username, config_pass = prepare_connection_parameters(env)
-    job_group = str(job_group).split(',')[0]
-    business_unit = str(business_unit).split(',')[0]
+    conn = psycopg2.connect(
+        host=rs_cfg["host"], port=rs_cfg.get("port", 5439),
+        dbname=rs_cfg["db_name"], user=rs_cfg["user"],
+        password=os.environ["REDSHIFT_PASSWORD"],
+    )
     try:
-        connection = create_database_connection(config_host, config_username, config_pass, env)
-        cursor = connection.cursor()
-
-        if execution_method == 'new-table':
-            handle_new_table(cursor, sheet_id, sheet_range, new_table_name, job_group, business_unit, env)
-        elif execution_method == 'new-column':
-            handle_new_column(cursor, sheet_id, sheet_range)
-        else:
-            raise Exception("Invalid execution method")
-        connection.commit()
-    except Exception as e:
-        raise Exception("Failed to insert into datalake_config.gsheet_export", e)
+        cur = conn.cursor()
+        ensure_table(cur, schema, table, columns, col_types)
+        conn.commit()
+        cur.close()
+        upsert(conn, schema, table, columns, business_key, rows)
+        print(f"[{schema}.{table}] upserted {len(rows)} rows (delete-insert on {business_key})")
     finally:
-        cursor.close()
-        connection.close()
+        conn.close()
 
-
-def get_env_variables():
-    aws_region = region
-    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-    aws_session_token = os.getenv('AWS_SESSION_TOKEN')
-    env = os.getenv('Environment')
-    new_table_name = os.getenv('GSHEET_TABLE_NAME')
-    sheet_id = os.getenv('GSHEET_ID')
-    sheet_range = os.getenv('SHEET_RANGE')
-    job_group = os.getenv('JOB_GROUP')
-    business_unit = os.getenv('BUSINESS_UNIT')
-    execution_method = os.getenv('ExecutionMethod')
-
-    return aws_region, aws_access_key_id, aws_secret_access_key, aws_session_token, env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method
-
-
-def input_validation(execution_method, env, new_table_name, sheet_id, sheet_range, job_group, business_unit):
-    if execution_method == 'new-table':
-        if env is None or new_table_name is None or sheet_id is None or sheet_range is None or job_group is None or business_unit is None:
-            raise Exception("Invalid input parameters. Please check")
-    elif execution_method == 'new-column':
-        if sheet_range is None or len(sheet_range.split('!')) != 2 or sheet_id is None:
-            raise Exception("Invalid input parameters. Please check")
-    else:
-        raise Exception("Invalid execution method. Please check")
-    print(
-        f"Environment - {env} Table Name - {new_table_name} Sheet ID - {sheet_id} Sheet Range - {sheet_range} Job Group - {job_group} Business Unit - {business_unit}"
-    )
-
-
-def assign_values(env, new_table_name, sheet_range, job_group):
-    if new_table_name:
-        new_table_name = new_table_name.split(',')[0]
-    tgt_sheet_name = str(sheet_range).split('!')[0]
-    job_group = str(job_group).split(',')[0]
-    # if job_group not in ('g0', 'g1'):
-    #     raise Exception("Invalid job group")
-    if env == 'stage':
-        crawler_name = stage_crawler_name
-    elif env == 'prod':
-        crawler_name = prod_crawler_name
-    else:
-        raise Exception("Invalid environment")
-    new_path = f's3://{datalake_bucket_prefix}-{env}/raw/fileupload/source=gsheet/parquet/{tgt_sheet_name}/'
-
-    return new_table_name, tgt_sheet_name, dag_name, crawler_name, new_path
+    if registry.backend_mode() == "yaml":
+        record = {
+            "target_schema": schema, "target_table": table,
+            "sheet_id": target["sheet_id"], "sheet_range": target["sheet_range"],
+            "business_key": business_key, "last_rows": len(rows),
+        }
+        if not registry.update("gsheet_targets",
+                               {"target_schema": schema, "target_table": table}, record):
+            registry.insert("gsheet_targets", record)
 
 
 def main():
-    # parameters
+    cfg = _config()
+    gsheet_cfg = cfg.get("gsheet") or {}
+    rs_cfg = cfg.get("redshift") or {}
+    sa_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or gsheet_cfg.get("service_account_json")
+    if not sa_json:
+        sys.exit("Set GOOGLE_APPLICATION_CREDENTIALS env var or gsheet.service_account_json in config.yml")
 
-    aws_region, aws_access_key_id, aws_secret_access_key, aws_session_token, env, new_table_name, sheet_id, sheet_range, job_group, business_unit, execution_method = get_env_variables()
+    targets = gsheet_cfg.get("targets") or []
+    if not targets:
+        sys.exit("No gsheet.targets defined in config.yml")
 
-    # Input validation
-    input_validation(execution_method, env, new_table_name, sheet_id, sheet_range, job_group, business_unit)
+    only = os.environ.get("TARGET_TABLE")
+    if only:
+        wanted = only.split(".")[-1]
+        targets = [t for t in targets if t["target_table"] == wanted]
+        if not targets:
+            sys.exit(f"No target matching TARGET_TABLE={only}")
 
-    new_table_name, tgt_sheet_name, dag_name, crawler_name, new_path = assign_values(env,
-                                                                                     new_table_name,
-                                                                                     sheet_range, job_group
-                                                                                     )
-
-    if execution_method == 'new-table':
-        insert_to_gsheet_export(env=env, new_table_name=new_table_name, sheet_id=sheet_id, sheet_range=sheet_range,
-                                job_group=job_group,
-                                business_unit=business_unit, execution_method=execution_method)
-    elif execution_method == 'new-column':
-        print("Updating sheet range in gsheet export")
-        insert_to_gsheet_export(env=env, new_table_name=None, sheet_id=sheet_id, sheet_range=sheet_range,
-                                job_group=None,
-                                business_unit=None, execution_method=execution_method)
-    trigger_dag(env, dag_name, aws_region, sheet_range)
-    glue = boto3.client('glue', region_name=aws_region, aws_access_key_id=aws_access_key_id,
-                        aws_secret_access_key=aws_secret_access_key, aws_session_token=aws_session_token)
-    if execution_method == 'new-table':
-        current_s3_targets = get_crawler_data_sources(glue, crawler_name)
-        data_source_name = '/{data_source_name}/'.format(data_source_name=sheet_range.split('!')[0])
-        if data_source_name not in str(current_s3_targets):
-            print("Adding sheet to the crawler data sources")
-            temp_s3_target = {**current_s3_targets[0], 'Path': new_path}
-            current_s3_targets.append(temp_s3_target)
-            new_s3_targets = current_s3_targets
-            print("New S3 target = ", new_s3_targets)
-            update_crawler(glue, new_s3_targets, crawler_name)
-        else:
-            print("Sheet already present in the crawler data sources, Kindly check")
-            print(current_s3_targets)
-    print("Running the crawler")
-    run_crawler(glue, crawler_name)
+    for target in targets:
+        run_target(rs_cfg, sa_json, target)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

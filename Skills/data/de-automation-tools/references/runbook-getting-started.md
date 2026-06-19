@@ -17,7 +17,7 @@ querying databases, or writing SQL by hand, these tools do it for you via Jenkin
                           │                                              │
   RDS MySQL  ──[DMS]────► │  dms_automation        → S3 raw data        │
                           │  transactional_migration → Hudi tables       │
-  Google     ─────────► │  gsheet_onboarding     → S3 + Glue           │
+  Google     ─────────► │  gsheet_onboarding     → Redshift table      │
   Sheets                  │                                              │
                           │  cost_tracker          → MySQL metrics DB    │
                           │  airflow_monitoring    → Google Chat / Slack │
@@ -143,46 +143,33 @@ If the schema is already there, no action needed.
 
 ---
 
-## Component 4 — GSheet Onboarding
+## Component 4 — GSheet → Redshift Loader
 
 ### What problem does it solve?
 
-Many business teams maintain data in Google Sheets that analysts need to query alongside
-warehouse data. Getting a sheet into the datalake requires: registering it in the config DB,
-updating the Glue crawler to know about the new S3 location, and triggering the ingestion DAG.
-This tool automates all three steps.
+Business teams keep data in Google Sheets that analysts need in the warehouse.
+This tool loads a sheet **directly into a Redshift table** — no S3/Glue/Athena hop.
 
 ### What does it do?
 
-Two modes:
-
-**`new-table`** (first-time onboarding):
-1. Validates the sheet isn't already registered
-2. INSERTs a new row into `datalake_config.gsheet_export` with the sheet's S3 target path
-3. Adds the new S3 path to the Glue crawler's target list
-4. **Runs the Glue crawler** to discover the new schema
-5. Triggers the `gsheet_migration_by_sheet_range_dag` Airflow DAG to ingest the sheet data
-
-**`new-column`** (adding columns to an existing sheet):
-1. Updates the `sheet_range` for the existing sheet (e.g., extend from `Sheet1!A:Z` to `Sheet1!A:AA`)
-2. Triggers the DAG — no crawler update needed
+Per target declared in `config.yml` (`gsheet.targets`):
+1. Reads the sheet range via the Google Sheets API (service-account auth).
+2. `CREATE SCHEMA / TABLE IF NOT EXISTS` (declared column types, or inferred `VARCHAR`).
+3. **Delete-insert upsert** on the `business_key` via a staging temp table — rerunning
+   replaces exactly the rows whose key is in the sheet (idempotent).
 
 ### Example scenario
 
-> The Finance team has a Google Sheet with budget allocations: Sheet ID `1BxiM...`, range `Sheet1!A:H`.
+> Finance keeps order data in a Google Sheet (columns `order_id, amount, status, updated_at`).
+> A target is declared with `target_table: sales_from_sheet`, `business_key: [order_id]`.
 >
-> DE engineer runs GSheet Onboarding (new-table):
-> - Row inserted: `gsheet_export` now knows this sheet → S3 bucket `<datalake-raw-bucket>/gsheets/budget/`
-> - Glue crawler updated to include the new S3 path
-> - Crawler runs → schema registered in Glue catalog
-> - DAG triggered → sheet data lands in S3
+> `python main.py` →
+> - Reads the sheet, ensures `public.sales_from_sheet` exists in Redshift.
+> - Deletes existing rows whose `order_id` is in the sheet, inserts the sheet rows.
+> - Analysts query `public.sales_from_sheet` immediately.
 >
-> Analysts can now query `budget` in Athena.
->
-> Two weeks later, Finance adds a new column. DE runs onboarding again with `new-column`:
-> - Sheet range updated in `gsheet_export`
-> - DAG re-triggered — no crawler needed
-> - New column available in Athena automatically
+> Next week Finance edits/adds rows. Re-run → only the matching `order_id`s are replaced;
+> everything else is untouched. Safe to schedule on any cron / Airflow.
 
 ---
 
@@ -274,7 +261,6 @@ automatically.
 | New RDS schema needs to be in the datalake | **DMS Automation** first, then **Transactional Migration** |
 | Adding new tables from an already-onboarded RDS schema | **Transactional Migration** (`new-table`) |
 | Adding new columns to an already-onboarded table | **Transactional Migration** (`new-column-with-full-load` or `new-column-without-full-load`) |
-| Google Sheet data needs to be queryable in Athena | **GSheet Onboarding** (`GsheetIngestionAutomation`, `new-table`) |
-| Sheet has a new column / expanded range | **GSheet Onboarding** (`GsheetIngestionAutomation`, `new-column`) |
+| Load a Google Sheet into a Redshift table | **GSheet → Redshift Loader** (`python main.py`) |
 | MWAA health check or alerting is broken | **Airflow Monitoring** — check the tests and alert channels |
 | Weekly DE cost/metrics are missing | **Cost Tracker** — check if `WeeklyCostTrackerAutomation` ran |
