@@ -11,6 +11,7 @@ profile / instance role) — no custom credential handling.
 
     cd cost_tracker_automation && python main.py
 """
+import csv
 import os
 import pathlib
 from datetime import datetime, timezone, timedelta
@@ -65,6 +66,15 @@ def cost_by_service(start, end, region, tag_key=None, tag_values=None):
     return totals
 
 
+def write_csv(path, start, end, totals):
+    """Write per-service costs to a CSV: week_start, week_end, service, amortized_cost."""
+    with open(path, "w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["week_start", "week_end", "service", "amortized_cost"])
+        for service, amount in sorted(totals.items(), key=lambda kv: kv[1], reverse=True):
+            writer.writerow([start, end, service, f"{amount:.2f}"])
+
+
 def main():
     cfg = _config()
     region = (cfg.get("aws") or {}).get("region", "us-east-1")
@@ -84,6 +94,10 @@ def main():
         print(f"{service:<40} {amount:>9.2f}")
     print("-" * 50)
     print(f"{'TOTAL':<40} {grand_total:>9.2f}")
+
+    csv_path = os.environ.get("COST_CSV_PATH", ct.get("csv_path") or f"cost_by_service_{start}_to_{end}.csv")
+    write_csv(csv_path, start, end, totals)
+    print(f"\nWrote {len(totals)} rows to {csv_path}")
 
 
 if __name__ == "__main__":

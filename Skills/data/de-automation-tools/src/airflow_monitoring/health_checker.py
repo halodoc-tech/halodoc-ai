@@ -1,3 +1,4 @@
+import csv
 import logging
 import os
 import time
@@ -11,9 +12,23 @@ from datetime import datetime, timezone, timedelta
 
 unhealthy_component = []
 
+HEALTH_CSV = os.environ.get("HEALTH_CSV_PATH", "airflow_health.csv")
+
+
+def write_health_snapshot(component_status):
+    """Append the current component health to a CSV (timestamp, component, status)."""
+    is_new = not os.path.exists(HEALTH_CSV)
+    ts = datetime.now(timezone.utc).isoformat()
+    with open(HEALTH_CSV, "a", newline="") as handle:
+        writer = csv.writer(handle)
+        if is_new:
+            writer.writerow(["timestamp_utc", "component", "status"])
+        for component, status in component_status.items():
+            writer.writerow([ts, component, status])
+
 
 def create_web_token():
-    aws_region = 'ap-southeast-1'
+    aws_region = region
     aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     aws_session_token = os.getenv('AWS_SESSION_TOKEN')
@@ -168,13 +183,15 @@ def main():
                 print("Airflow Instance is not healthy.Sending Alert...")
                 print(unhealthy_component)
                 MESSAGE = f":monit-alert:The following Airflow Component is down. Please check the logs for more information.:monit-alert:\n```{unhealthy_component}```"
-                send_gchat_alert(MESSAGE)
+                send_alert(MESSAGE)
             else:
                 print("Airflow Instance became healthy within a minute")
         else:
             print("Airflow Instance is healthy")
     else:
         print("Airflow Instance is healthy")
+
+    write_health_snapshot(components)
 
     error_count, error_dags = checkImportErrors()
     if error_count > 0:

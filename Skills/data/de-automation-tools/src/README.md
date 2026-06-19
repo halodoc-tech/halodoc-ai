@@ -35,7 +35,10 @@ Set only what the component you run needs:
 | `VAULT_STAGE_TOKEN`, `VAULT_PROD_TOKEN` | dms, transactional (fetch source DB creds from Vault) |
 | `DATALAKE_CONFIG_STAGE_PASSWORD`, `DATALAKE_CONFIG_PROD_PASSWORD` | components writing to datalake_config |
 | `AWS_ACCESS_KEY_ID_STAGE/_PROD`, `AWS_SECRET_ACCESS_KEY_STAGE/_PROD`, `AWS_SESSION_TOKEN_STAGE/_PROD` | cost_tracker (Cost Explorer / CloudWatch) |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | dms / transactional boto3 clients |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | dms / transactional / cost_tracker / airflow_monitoring boto3 clients |
+| `ALERT_WEBHOOK_URL` | optional — airflow_monitoring posts alerts here (Slack/Google Chat incoming webhook); if unset, alerts go to stdout + CSV only |
+
+Output paths (all optional, sensible defaults): `COST_CSV_PATH`, `HEALTH_CSV_PATH`, `ALERT_CSV_PATH`.
 
 Component **inputs** (what to onboard) are also passed as env vars, matching the
 original Jenkins parameters — e.g. `SCHEMA_NAME`, `SOURCE_DB_HOST`,
@@ -56,10 +59,15 @@ cd airflow_monitoring                   && python health_checker.py
 
 ## Notes
 
-- **cost_tracker** is a simplified, generic version: it reports AWS Cost Explorer
-  spend per service for the previous week (optionally filtered by a CostCenter tag).
-  The original also collected S3/CloudWatch/Redshift inventory metrics — that part was
-  dropped because it was tightly bound to one environment's bucket list. Extend
-  `cost_by_service()` if you need more.
+- **Outputs are CSV / stdout, not a database.** cost_tracker writes
+  `cost_by_service_<week>.csv`; airflow_monitoring writes `airflow_health.csv` (status
+  snapshot) and `airflow_alerts.csv` (alerts). This keeps both reusable anywhere —
+  point them at a warehouse later if you want.
+- **cost_tracker** is a simplified, generic version: AWS Cost Explorer spend per service
+  for the previous week (optionally filtered by a CostCenter tag). The original also
+  collected S3/CloudWatch/Redshift inventory metrics — dropped because it was tightly
+  bound to one environment's bucket list. Extend `cost_by_service()` if you need more.
+- **airflow_monitoring** checks MWAA component health + DAG import errors, writes a CSV
+  snapshot, and raises alerts via stdout/CSV (or a webhook if `ALERT_WEBHOOK_URL` is set).
 - These run standalone (`python main.py`) or under any scheduler/CI — the
   original deployment used Jenkins, but nothing here depends on Jenkins.
