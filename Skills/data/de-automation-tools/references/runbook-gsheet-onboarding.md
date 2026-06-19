@@ -222,7 +222,7 @@ ExecutionMethod:
   new-table
 
 GSHEET_ID:
-  1z6Ep98HgiOLgQhvbV-Gd2IL2kJu7BQFxj81ofetDGxk
+  <your-google-sheet-id>
 
 SHEET_RANGE:
   example_sheet!A1:C

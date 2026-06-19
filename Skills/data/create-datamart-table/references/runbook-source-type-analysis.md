@@ -11,7 +11,7 @@ SQL scripts are stored centrally in S3. Fetch via AWS CLI (streams to stdout, no
 
 ```bash
 aws s3 cp s3://<datalake-script-bucket>/transformations/<schema>/<table_name>.sql - \
-  --region ap-southeast-1
+  --region <aws_region>
 ```
 
 Infer `<schema>` from the table name prefix:

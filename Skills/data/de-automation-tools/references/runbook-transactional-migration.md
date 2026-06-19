@@ -235,9 +235,9 @@ hudi_parallelism  frequency_in_mins  job_group  clustering_enabled  enable_hudi_
 | `upscale_instance_class` | `dms.t3.large` |
 | `down_instance_class` | `dms.t3.small` |
 | `dag_name` | `load_raw_to_process_full_load_eks_dag` |
-| `region` | `ap-southeast-1` |
-| Stage full-load instance ARN | `arn:aws:dms:ap-southeast-1:<STAGE_ACCOUNT_ID>:rep:...` |
-| Prod full-load instance ARN | `arn:aws:dms:ap-southeast-1:<PROD_ACCOUNT_ID>:rep:dms-prod-full-load` |
+| `region` | `<aws_region>` |
+| Stage full-load instance ARN | `arn:aws:dms:<aws_region>:<STAGE_ACCOUNT_ID>:rep:<rep-id>` |
+| Prod full-load instance ARN | `arn:aws:dms:<aws_region>:<PROD_ACCOUNT_ID>:rep:<rep-id>` |
 
 ---
 

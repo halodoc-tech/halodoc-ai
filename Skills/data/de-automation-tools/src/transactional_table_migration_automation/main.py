@@ -9,6 +9,7 @@ from sql_scripts.datalake_config import *
 from configs.datalake_config_creds import *
 from utils.variables import *
 from utils.api import *
+import registry
 
 
 def connect_mysql_db(rds_creds):
@@ -370,9 +371,124 @@ def table_name_checker(result_rds_endpoints, schema_name, table_names, env):
     return table_names
 
 
+def _yaml_dms_full_load(dms_client, endpoint, schema_name, tables, env):
+    """Best-effort: add tables to the DMS full-load task and restart it. Guarded so the
+    YAML registry write + DAG trigger still happen even if DMS isn't reachable."""
+    dms_tasks = endpoint.get('dms_tasks')
+    if not dms_tasks:
+        print("ℹ️  No dms_tasks recorded for this endpoint; skipping DMS task update.")
+        return
+    try:
+        parsed = json.loads(dms_tasks) if isinstance(dms_tasks, str) else dms_tasks
+        task_name = parsed.get('full_load_task')
+    except Exception:
+        task_name = None
+    if not task_name:
+        print("ℹ️  No full_load_task name found; skipping DMS task update.")
+        return
+    try:
+        desc = describe_replication_task(dms_client=dms_client, replication_task_name=task_name)
+        task = desc['ReplicationTasks'][0]
+        task_arn = task['ReplicationTaskArn']
+        mappings = json.loads(task['TableMappings'])
+        selection = next((r for r in mappings['rules'] if r['rule-type'] == 'selection'), None)
+        if not selection:
+            print("⚠️  No selection rule in DMS task mappings; skipping DMS update.")
+            return
+        existing = {r['object-locator']['table-name'] for r in mappings['rules'] if r['rule-type'] == 'selection'}
+        for t in tables:
+            if t in existing:
+                continue
+            rule = json.loads(json.dumps(selection))
+            rule['object-locator'] = {'schema-name': schema_name, 'table-name': t}
+            mappings['rules'].append(rule)
+        for i, r in enumerate(mappings['rules'], start=1):
+            r['rule-id'] = str(i)
+            r['rule-name'] = str(i)
+        modify_replication_task(dms_client=dms_client, replication_task_arn=task_arn,
+                                new_table_mappings=json.dumps(mappings), migration_type=migration_type)
+        resize_replication_instance(env, dms_client, scale='up')
+        restart_replication_task(dms_client=dms_client, replication_task_arn=task_arn)
+        resize_replication_instance(env, dms_client, scale='down')
+        print("✅ DMS full-load task updated and restarted")
+    except Exception as e:
+        print(f"⚠️  DMS task update skipped/failed: {e}")
+
+
+def run_yaml(env, schema_name, tgt_dbname, src_dbname, table_names, execution_method,
+             incr_key, partition_column, schedule, region, dms_client):
+    """Generic, database-free flow (backend.mode: yaml).
+
+    Writes the table registry to local YAML (transformation_master.yml + watermark.yml),
+    updates the DMS full-load task, and triggers the Airflow DAG. No datalake_config DB.
+    """
+    endpoint = registry.find('rds_endpoints', schema_name=schema_name)
+    if not endpoint:
+        sys.exit(f"No entry for schema '{schema_name}' in the rds_endpoints registry. "
+                 f"Run dms_automation first, or add it to <registry_dir>/rds_endpoints.yml.")
+
+    rds_creds = {'host': endpoint.get('server_name'), 'port': endpoint.get('port'),
+                 'user': endpoint.get('user_name'), 'password': None}
+    try:
+        rds_creds['password'] = get_vault_key(endpoint['vault_key'], env)['DB_PASSWORD']
+    except Exception as e:
+        print(f"⚠️  Could not fetch source DB password from Vault ({e}); column introspection skipped.")
+
+    def schema_doc_for(table):
+        if not rds_creds.get('password'):
+            return {}
+        try:
+            conn = connect_mysql_db(rds_creds)
+            cur = conn.cursor()
+            cur.execute(SCHEMA_DEF_QUERY.format(schema_name, table))
+            doc = {field[0]: map_data_type(field[1]) for field in cur.fetchall()}
+            conn.close()
+            if incr_key and incr_key not in doc:
+                doc[incr_key] = 'timestamp'
+            return doc
+        except Exception as e:
+            print(f"⚠️  Column introspection failed for {table}: {e}")
+            return {}
+
+    if execution_method == 'new-table':
+        new_tables = [t for t in table_names
+                      if not registry.find('transformation_master', src_schemaname=schema_name, src_tablename=t)]
+        already = [t for t in table_names if t not in new_tables]
+        if already:
+            print(f"Already onboarded (skipping registry insert): {already}")
+        for t in new_tables:
+            registry.insert('transformation_master', {
+                'src_dbname': src_dbname, 'src_schemaname': schema_name, 'src_tablename': t,
+                'tgt_dbname': tgt_dbname, 'tgt_schemaname': schema_name, 'tgt_tablename': t,
+                'incremental_key': incr_key, 'partition_key': partition_column,
+                'schedule': schedule, 'load_type': 'full-load', 'status': 'ready',
+                'tgt_schema_definition': schema_doc_for(t),
+            })
+            if not registry.find('watermark', src_schemaname=schema_name, src_tablename=t):
+                registry.insert('watermark', {'src_schemaname': schema_name, 'src_tablename': t})
+            print(f"✅ Registered '{schema_name}.{t}' in transformation_master + watermark (YAML)")
+        _yaml_dms_full_load(dms_client, endpoint, schema_name, new_tables or table_names, env)
+        trigger_full_load_dag(env, dag_name, region)
+
+    elif execution_method in ('new-column-with-full-load', 'new-column-without-full-load'):
+        for t in table_names:
+            updated = registry.update('transformation_master',
+                                      {'src_schemaname': schema_name, 'src_tablename': t},
+                                      {'tgt_schema_definition': schema_doc_for(t), 'status': 'ready'})
+            if updated:
+                print(f"✅ Updated schema for '{schema_name}.{t}' (YAML)")
+            else:
+                print(f"⚠️  {t} not found in transformation_master registry; nothing updated.")
+        if execution_method == 'new-column-with-full-load':
+            _yaml_dms_full_load(dms_client, endpoint, schema_name, table_names, env)
+            trigger_full_load_dag(env, dag_name, region)
+    else:
+        sys.exit(f"Wrong execution method - {execution_method}")
+
+
 def main():
     # AWS credentials and region configuration
-    aws_region = 'ap-southeast-1'
+    aws_region = region
     aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     aws_session_token = os.getenv('AWS_SESSION_TOKEN')
@@ -432,6 +548,12 @@ def main():
     table_names = table_names.replace(" ", "")
     table_names = table_names.split(",")
     print("Tables = {table_names}".format(table_names=table_names))
+
+    if registry.backend_mode() == 'yaml':
+        # database-free path: write local YAML registry, update DMS full-load, trigger DAG
+        run_yaml(env, schema_name, tgt_dbname, src_dbname, table_names, execution_method,
+                 incr_key, partition_column, frequency_in_mins, aws_region, dms_client)
+        return
 
     if env == 'stage':
         config_host = DATALAKE_CONFIG_STAGE_HOST

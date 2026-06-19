@@ -7,7 +7,7 @@ Environment Variables Required:
   - AWS_ACCESS_KEY_ID: Your AWS access key
   - AWS_SECRET_ACCESS_KEY: Your AWS secret key
   - AWS_SESSION_TOKEN: (Optional) If using temporary credentials
-  - AWS_REGION: AWS region (Default: 'ap-southeast-1')
+  - AWS_REGION: AWS region (Default: config.yml aws.region)
   - SCHEMA_NAME: Database schema name to process
   - Environment: Environment name (stage/prod) for vault integration
 
@@ -34,13 +34,19 @@ from configs.dms_automation_configs import *
 from utils.vault_client import get_vault_credentials
 from utils.db_connection import mysql_connection, execute_query, fetch_all, fetch_one, DbConnectionError
 from sql_scripts.dms_automation_sql import RDS_ENDPOINT_CONNECTION
+import registry
 
 
 def get_rds_endpoint_config(schema_name: str, rds_credentials: Dict) -> Optional[Dict]:
     """
     Retrieve RDS endpoint configuration using the common utility.
     """
-    
+    if registry.backend_mode() == "yaml":
+        result = registry.find("rds_endpoints", schema_name=schema_name)
+        if not result:
+            print(f"No configuration found for schema '{schema_name}'")
+        return result
+
     try:
         # The 'with' statement handles opening AND automatically closing the connection
         with mysql_connection(
@@ -484,6 +490,19 @@ def insert_rds_endpoint_config(endpoint_config: Dict, rds_credentials: Dict) -> 
         "full_load_task": f"full-load-{schema_name_clean}",
         "incremental_task": f"incr-load-{schema_name_clean}"
     })
+
+    if registry.backend_mode() == "yaml":
+        registry.insert("rds_endpoints", {
+            "schema_name": endpoint_config["schema_name"],
+            "server_name": endpoint_config["server_name"],
+            "port": int(endpoint_config["port"]),
+            "user_name": endpoint_config["user_name"],
+            "vault_key": endpoint_config["vault_key"],
+            "dms_tasks": dms_tasks,
+        })
+        print(f"✅ Recorded endpoint config for schema '{endpoint_config['schema_name']}' in YAML registry")
+        return True
+
     # Prepare the insert query and data
     insert_query = """
     INSERT INTO datalake_config.rds_endpoints (schema_name, server_name, port, user_name, vault_key, dms_tasks)
@@ -566,7 +585,7 @@ def main():
     # Get environment variables
     schema_name = os.environ.get('SCHEMA_NAME')
     environment = os.environ.get('Environment')
-    aws_region = os.environ.get('AWS_REGION', 'ap-southeast-1')
+    aws_region = os.environ.get('AWS_REGION', region)
 
     src_engine = os.environ.get('SOURCE_ENGINE')
     src_endpoint_host = os.environ.get('SOURCE_DB_HOST')

@@ -19,7 +19,7 @@ task (CDC, ongoing changes).
 | `SOURCE_ENGINE` | String | e.g., `mysql` |
 | `SOURCE_DB_USER` | String | DB username (check `rds_endpoints` for existing users — see workflow below) |
 | `SOURCE_DB_HOST` | String | RDS endpoint host |
-| `SOURCE_DB_PORT` | String | e.g., `3306` or `33066` |
+| `SOURCE_DB_PORT` | String | e.g., `<port>` |
 | `SOURCE_DB_VAULT_PATH` | String | HashiCorp Vault path for DB credentials (check existing pattern below) |
 | `TARGET_FULL_LOAD_ENDPOINT` | String | DMS target endpoint for full-load task |
 | `TARGET_INCR_LOAD_ENDPOINT` | String | DMS target endpoint for incremental/CDC task |
@@ -74,7 +74,7 @@ ORDER BY schema_name;
 ```
 
 Use the results to:
-- **Confirm `SOURCE_DB_USER`** — the standard user across all entries is `datalake_dms_user`; flag if any schema uses a different user
+- **Confirm `SOURCE_DB_USER`** — the standard user across all entries is `<your-dms-db-user>`; flag if any schema uses a different user
 - **Suggest `SOURCE_DB_VAULT_PATH`** — follow the existing pattern `datalake/dms/mysql/{hostname-prefix}` where `hostname-prefix` is the part of the host before the first `.` (e.g., host `mydb.<cluster-id>...` → `datalake/dms/mysql/mydb`)
 
 Show the user a pre-fill suggestion before asking them to confirm:
@@ -88,7 +88,7 @@ Schema '{schema_name}' is NOT in rds_endpoints.
 A new DMS endpoint needs to be created.
 
 Based on existing entries, suggested values:
-  SOURCE_DB_USER      : datalake_dms_user  (standard across all schemas)
+  SOURCE_DB_USER      : <your-dms-db-user>  (standard across all schemas)
   SOURCE_DB_VAULT_PATH: datalake/dms/mysql/{hostname-prefix}  (inferred from host)
 
 Please provide or confirm:
@@ -165,13 +165,13 @@ SOURCE_ENGINE:
   mysql
 
 SOURCE_DB_USER:
-  datalake_dms_user
+  <your-dms-db-user>
 
 SOURCE_DB_HOST:
   mydb.<cluster-id>.ap-southeast-1.rds.amazonaws.com
 
 SOURCE_DB_PORT:
-  33066
+  <port>
 
 SOURCE_DB_VAULT_PATH:
   datalake/dms/mysql/mydb
@@ -183,10 +183,10 @@ TARGET_INCR_LOAD_ENDPOINT:
   tgt-incr-load-s3-<datalake-bucket-prod>
 
 FULL_LOAD_INSTANCE:
-  dms-prod-full-load
+  <full-load-instance>
 
 INCR_LOAD_INSTANCE:
-  dms-prod-incr-group3-rep
+  <incr-load-instance>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -201,8 +201,8 @@ INCR_LOAD_INSTANCE:
 |---|---|
 | Full-load target endpoint | `tgt-full-load-s3-<datalake-bucket-stage>` |
 | Incremental target endpoint | `tgt-incr-load-s3-<datalake-bucket-stage>` |
-| Full-load replication instance | `dms-stage-incr-group2-rep` |
-| Incremental replication instance | `dms-stage-incr-group2-rep` |
+| Full-load replication instance | `<incr-load-instance>` |
+| Incremental replication instance | `<incr-load-instance>` |
 
 ### Prod
 
@@ -210,8 +210,8 @@ INCR_LOAD_INSTANCE:
 |---|---|
 | Full-load target endpoint | `tgt-full-load-s3-<datalake-bucket-prod>` |
 | Incremental target endpoint | `tgt-incr-load-s3-<datalake-bucket-prod>` |
-| Full-load replication instance | `dms-prod-full-load` |
-| Incremental replication instance | `dms-prod-incr-group3-rep` _(verify group number with user — multiple groups exist)_ |
+| Full-load replication instance | `<full-load-instance>` |
+| Incremental replication instance | `<incr-load-instance>` _(verify group number with user — multiple groups exist)_ |
 
 > **Note:** Incremental replication instances have multiple groups (`group2`, `group3`, etc.). Ask the user which group to use if not specified, or check existing `rds_endpoints` entries for the same RDS host to see what group is already in use.
 

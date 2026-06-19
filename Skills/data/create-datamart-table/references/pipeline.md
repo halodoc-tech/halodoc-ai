@@ -27,7 +27,7 @@ Ask only what cannot be auto-discovered. Collect in **one message**.
 
 ```bash
 aws s3 cp s3://<datalake-script-bucket>/transformations/<schema>/<table_name>.sql - \
-  --region ap-southeast-1
+  --region <aws_region>
 ```
 
 Infer `<schema>` from table_type + table name prefix:
@@ -77,18 +77,18 @@ If the default workgroup returns an access error, retry with `--work-group bi-pr
 aws athena start-query-execution \
   --query-string "DESCRIBE <database>.<table>" \
   --result-configuration "OutputLocation=s3://<athena-results-bucket>/schema-check/" \
-  --region ap-southeast-1
+  --region <aws_region>
 
 # if access error — retry with bi-prod workgroup
 aws athena start-query-execution \
   --query-string "DESCRIBE <database>.<table>" \
   --result-configuration "OutputLocation=s3://<athena-results-bucket>/schema-check/" \
   --work-group bi-prod \
-  --region ap-southeast-1
+  --region <aws_region>
 ```
 
 ```bash
-aws athena get-query-results --query-execution-id <id> --region ap-southeast-1
+aws athena get-query-results --query-execution-id <id> --region <aws_region>
 ```
 
 **Metabase MCP — Redshift information_schema**:
