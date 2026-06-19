@@ -31,5 +31,5 @@ from your machine (`python main.py`); no Jenkins required.
 
 This is the **most AWS-coupled** skill — it orchestrates DMS, MWAA, Vault, and Athena.
 The bundled `src/` is fully generic (no hard-coded hosts/accounts/buckets) but still
-assumes an AWS data-lake stack. Cost tracker assumes AWS Cost Explorer + CloudWatch with
-a `CostCenter` tag and an S3 bucket inventory you customize in `metrics_dictionary.py`.
+assumes an AWS data-lake stack. Cost tracker is a simplified version: AWS Cost Explorer
+spend per service for the previous week, optionally filtered by a `CostCenter` tag.

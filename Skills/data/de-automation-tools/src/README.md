@@ -56,10 +56,10 @@ cd airflow_monitoring                   && python health_checker.py
 
 ## Notes
 
-- **cost_tracker** ships an S3 bucket inventory in `cost_tracker_automation/metrics_dictionary.py`
-  with example names (`example-datalake-*`). Replace these with your real bucket
-  names — CloudWatch metrics are fetched per exact bucket name.
-- `apache-airflow` is required only by components that read Airflow Variables
-  (cost_tracker session cache); install it from `requirements.txt`.
+- **cost_tracker** is a simplified, generic version: it reports AWS Cost Explorer
+  spend per service for the previous week (optionally filtered by a CostCenter tag).
+  The original also collected S3/CloudWatch/Redshift inventory metrics — that part was
+  dropped because it was tightly bound to one environment's bucket list. Extend
+  `cost_by_service()` if you need more.
 - These run standalone (`python main.py`) or under any scheduler/CI — the
   original deployment used Jenkins, but nothing here depends on Jenkins.

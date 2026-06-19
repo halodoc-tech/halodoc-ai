@@ -53,12 +53,12 @@ databases:
     prod_user:  <rds-user>
     port:       3306
     db_name:    datalake_config
-  redshift:
-    host:    <redshift-host>
-    port:    5439
-    db_name: <redshift-db>
-    user:    <redshift-user>
-    cluster_name: <redshift-cluster-name>  # cluster id for CloudWatch metrics
+
+# ── Cost tracker (weekly AWS cost-by-service report) ────────────────────────
+cost_tracker:
+  timezone: UTC                  # week window is computed in this tz
+  cost_center_tag_key: ""        # optional Cost Explorer tag filter; blank = no filter
+  cost_center_tag_values: []     # e.g. ["DE", "DE-DS"]
 
 # ── DMS endpoints + replication instances, per env ──────────────────────────
 dms:
