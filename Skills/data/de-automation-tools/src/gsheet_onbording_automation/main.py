@@ -47,13 +47,26 @@ def read_sheet(sheet_id, sheet_range, sa_json):
         values = spreadsheet.sheet1.get_all_values()
     if not values:
         return [], []
-    return [c.strip() for c in values[0]], values[1:]
+    # normalize header to snake_case column names (e.g. "Sub Component" -> "sub_component")
+    header = ["_".join(c.strip().lower().split()) for c in values[0]]
+    return header, values[1:]
 
 
-def ensure_table(cur, schema, table, columns, col_types):
-    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}";')
+def ensure_table(conn, schema, table, columns, col_types):
+    """Best-effort DDL. Skips on insufficient privilege (assumes the schema/table
+    already exists) so least-privilege users can still upsert into existing tables."""
     cols_ddl = ", ".join(f'"{c}" {col_types.get(c, "VARCHAR(65535)")}' for c in columns)
-    cur.execute(f'CREATE TABLE IF NOT EXISTS "{schema}"."{table}" ({cols_ddl});')
+    for stmt in (f'CREATE SCHEMA IF NOT EXISTS "{schema}";',
+                 f'CREATE TABLE IF NOT EXISTS "{schema}"."{table}" ({cols_ddl});'):
+        cur = conn.cursor()
+        try:
+            cur.execute(stmt)
+            conn.commit()
+        except psycopg2.Error as exc:
+            conn.rollback()
+            print(f"⚠️  skipping DDL (assuming object exists): {str(exc).strip()}")
+        finally:
+            cur.close()
 
 
 def upsert(conn, schema, table, columns, business_key, rows):
@@ -110,10 +123,7 @@ def run_target(rs_cfg, sa_json, target):
         password=os.environ["REDSHIFT_PASSWORD"],
     )
     try:
-        cur = conn.cursor()
-        ensure_table(cur, schema, table, columns, col_types)
-        conn.commit()
-        cur.close()
+        ensure_table(conn, schema, table, columns, col_types)
         upsert(conn, schema, table, columns, business_key, rows)
         print(f"[{schema}.{table}] upserted {len(rows)} rows (delete-insert on {business_key})")
     finally:
