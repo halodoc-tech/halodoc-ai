@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Configuration for the create-datamart-table skill.
+#
+# This skill is environment-driven. Fork this file and fill the <...> values
+# for your warehouse. The skill reads these instead of any hard-coded values.
+# The values below are a reference example — replace them with your environment's.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ── Backend mode ───────────────────────────────────────────────────────────
+# How the skill discovers table metadata and validates against the registry.
+#   datalake_config : query a metadata DB (datalake_config) via Metabase MCP.
+#                     Use if you run a datalake_config-style metadata schema.
+#   yaml            : read a local manifest (see metadata_manifest) instead.
+#                     Use if you do NOT have datalake_config — fully self-contained.
+backend:
+  mode: datalake_config            # datalake_config | yaml
+  metadata_manifest: metadata.yml  # used only when mode: yaml
+
+# ── Metabase MCP (used when backend.mode: datalake_config) ──────────────────
+metabase:
+  mcp_server: metabase
+  redshift_db_id: 39               # warehouse (Redshift) connection id
+  config_db_id: 41                 # datalake_config (MySQL) connection id
+
+# ── AWS ─────────────────────────────────────────────────────────────────────
+aws:
+  region: <aws_region>
+  script_bucket: <datalake-script-bucket>        # s3://<bucket>/transformations/<schema>/<table>.sql
+  athena_results_bucket: <athena-results-bucket>
+  athena_workgroups: [primary, bi-prod]          # tried in order on access error
+
+# ── Jenkins jobs (the real engine; skill only generates their params) ───────
+jenkins:
+  stage_create: StageDatamartTableCreation
+  prod_create:  ProdDatamartTableCreation
+
+# ── datalake_config schema (used when backend.mode: datalake_config) ────────
+# Override table names + active-record filters if your schema differs.
+datalake_config:
+  tables:
+    dimensional_model:     dimensional_model
+    transformation_master: transformation_master
+    dag_variable:          dag_variable
+    watermark:             watermark
+  active_filter:
+    dimensional_model:     "active_flag = 'Y'"
+    transformation_master: "active_flag = 'Y'"
+    dag_variable:          "is_active = 'Y'"
+
+# ── Table-type taxonomy ─────────────────────────────────────────────────────
+# schema_folder : S3 folder under transformations/
+# introspect    : how to read the source schema — athena | metabase
+table_types:
+  dim_fact:         { schema_folder: dim_fact,         introspect: athena }
+  dim_fact_new_dag: { schema_folder: dim_fact,         introspect: athena }
+  monetization_dwh: { schema_folder: monetization_dwh, introspect: athena }
+  report_layer:     { schema_folder: report_layer,     introspect: athena }
+  nrt_table:        { schema_folder: nrt_table,         introspect: athena }
+  presentations:    { schema_folder: presentations,    introspect: metabase }
+  monetization:     { schema_folder: monetization,      introspect: metabase }
+
+# ── Locale ──────────────────────────────────────────────────────────────────
+# Schedules are entered in local time and converted to a UTC cron.
+timezone:
+  local: WIB
+  offset_to_utc_hours: 7           # local = UTC + this; subtract to get UTC cron

@@ -1,0 +1,130 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Configuration for the de-automation-tools skill.
+#
+# Fork this file and fill the <...> values for your environment. The skill
+# reads these instead of any hard-coded values. The values below are the
+# reference example — replace with your environment's values.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ── Backend mode ───────────────────────────────────────────────────────────
+# Where dms / gsheet / transactional read & write their registry state:
+#   datalake_config : a metadata DB (MySQL) — the original internal setup.
+#   yaml            : local YAML files under registry_dir — NO database needed.
+#                     Use this to run the tools standalone. AWS actions (DMS,
+#                     MWAA DAG triggers, Redshift loads) still run; only the registry is local.
+backend:
+  mode: yaml                       # datalake_config | yaml
+  registry_dir: registry           # folder (relative to this file) for the YAML registry
+
+# ── Metabase MCP (used when backend.mode: datalake_config) ──────────────────
+metabase:
+  mcp_server: metabase
+  config_db_id: 41                 # datalake_config (MySQL)
+
+# ── AWS ─────────────────────────────────────────────────────────────────────
+aws:
+  region: <aws_region>
+  # DMS replication-instance accounts (used in instance ARNs).
+  dms_account_id_stage: <STAGE_ACCOUNT_ID>
+  dms_account_id_prod:  <PROD_ACCOUNT_ID>
+  # Vault path pattern for DMS source DB creds. {prefix} = host part before first '.'
+  vault_path_pattern: "datalake/dms/mysql/{prefix}"
+  raw_bucket: <datalake-raw-bucket>        # gsheet/raw landing bucket
+  # Bucket-name prefix for the datalake S3 buckets, per env -> "<prefix>-<env>".
+  datalake_bucket_prefix: <datalake-bucket-prefix>
+
+# ── Airflow / MWAA ──────────────────────────────────────────────────────────
+airflow:
+  stage_env_name: <stage-airflow-env-name>
+  prod_env_name:  <prod-airflow-env-name>
+  alerts_channel: <alerts-channel>         # Google Chat / Slack channel for health alerts
+
+# ── Vault (HashiCorp) base URLs — secrets/tokens stay in env vars ───────────
+vault:
+  stage_base_url: <vault-stage-base-url>   # e.g. https://vault-stage.example.com
+  prod_base_url:  <vault-prod-base-url>    # e.g. https://vault.example.com
+
+# ── Databases (runtime — used by the bundled src/ code) ─────────────────────
+# Passwords/tokens are NEVER stored here — they come from env vars (see src/README.md).
+databases:
+  datalake_config:
+    stage_host: <datalake-config-stage-host>
+    prod_host:  <datalake-config-prod-host>
+    stage_user: <rds-user>
+    prod_user:  <rds-user>
+    port:       3306
+    db_name:    datalake_config
+
+# ── Cost tracker (weekly AWS cost-by-service report → CSV) ──────────────────
+cost_tracker:
+  timezone: UTC                  # week window is computed in this tz
+  cost_center_tag_key: ""        # optional Cost Explorer tag filter; blank = no filter
+  cost_center_tag_values: []     # e.g. ["DE", "DE-DS"]
+  csv_path: ""                   # optional output path; blank = cost_by_service_<start>_to_<end>.csv
+
+# ── DMS endpoints + replication instances, per env ──────────────────────────
+dms:
+  stage:
+    full_load_endpoint_id: <stage-full-load-endpoint-id>
+    incr_load_endpoint_id: <stage-incr-load-endpoint-id>
+    full_load_instance_id: <stage-full-load-instance-id>
+    incr_load_instance_id: <stage-incr-load-instance-id>
+    full_load_replication_instance_arn: "arn:aws:dms:<aws_region>:<STAGE_ACCOUNT_ID>:rep:<stage-rep-id>"
+  prod:
+    full_load_endpoint_id: <prod-full-load-endpoint-id>
+    incr_load_endpoint_id: <prod-incr-load-endpoint-id>
+    full_load_instance_id: <prod-full-load-instance-id>
+    incr_load_instance_id: <prod-incr-load-instance-id>
+    full_load_replication_instance_arn: "arn:aws:dms:<aws_region>:<PROD_ACCOUNT_ID>:rep:<prod-rep-id>"
+
+# ── Transactional migration constants ───────────────────────────────────────
+transactional:
+  migration_type:         full-load
+  upscale_instance_class: dms.t3.large
+  down_instance_class:    dms.t3.small
+  dag_name:               <full-load-dag-name>
+
+# ── Redshift (gsheet loader target) ────────────────────────────────────────
+# Password comes from the REDSHIFT_PASSWORD env var, never here.
+redshift:
+  host:    <redshift-host>
+  port:    5439
+  db_name: <redshift-db>
+  user:    <redshift-user>
+
+# ── GSheet → Redshift loader ────────────────────────────────────────────────
+# Each target loads one sheet into one Redshift table via delete-insert upsert
+# on business_key. Omit `columns` to infer all columns from the sheet header as
+# VARCHAR; declare `columns` to pin types + restrict/order the loaded columns.
+gsheet:
+  service_account_json: <path-to-google-service-account-json>  # or set GOOGLE_APPLICATION_CREDENTIALS
+  targets:
+    - sheet_id:      <your-google-sheet-id>
+      sheet_range:   Sheet1!A1:Z
+      target_schema: public
+      target_table:  sales_from_sheet
+      business_key:  [order_id]          # one or more columns; the merge key
+      columns:                            # optional — name: Redshift type
+        order_id:   BIGINT
+        amount:     "DECIMAL(18,2)"
+        status:     "VARCHAR(64)"
+        updated_at: TIMESTAMP
+
+# ── Jenkins jobs (exact names — the real engines) ───────────────────────────
+jenkins:
+  transaction_onboarding: TransactionTableOnboarding
+  dms_automation:         DMSAutomation
+  weekly_cost_tracker:    WeeklyCostTrackerAutomation
+
+# ── datalake_config schema (used when backend.mode: datalake_config) ────────
+datalake_config:
+  tables:
+    rds_endpoints:         rds_endpoints
+    dag_variable:          dag_variable
+    dimensional_model:     dimensional_model
+    transformation_master: transformation_master
+    de_metrics:            de_metrics
+  active_filter:
+    dimensional_model:     "active_flag = 'Y'"
+    transformation_master: "active_flag = 'Y'"
+    dag_variable:          "is_active = 'Y'"

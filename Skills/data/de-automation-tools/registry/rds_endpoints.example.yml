@@ -1,0 +1,7 @@
+# Source RDS endpoints. dms_automation appends here; transactional reads it.
+- schema_name: sales
+  server_name: sales-db.example.com
+  port: 3306
+  user_name: dms_user
+  vault_key: datalake/dms/mysql/sales
+  dms_tasks: '{"full_load_task": "full-load-sales", "incremental_task": "incr-load-sales"}'

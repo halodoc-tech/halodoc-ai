@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.pyc
+.coverage
+.pytest_cache/
+.venv/
+
+# de-automation YAML registry runtime data (keep only *.example.yml)
+Skills/data/de-automation-tools/registry/*.yml
+!Skills/data/de-automation-tools/registry/*.example.yml
+
+# Google service-account keys (never commit)
+sa_google.json
+sa_*.json
+*-sa.json

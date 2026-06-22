@@ -1,0 +1,3 @@
+# Incremental-load watermark anchors. Written by transactional.
+- src_schemaname: sales
+  src_tablename: orders
