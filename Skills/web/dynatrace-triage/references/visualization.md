@@ -1,0 +1,76 @@
+# Visualization (Pre-Fix Triage Board + Post-Run Summary)
+
+Auto-heal (Mode 3) never goes straight from eligibility filtering into
+fixing. Between Phase 2A (diagnose all, no side effects) and Phase 2B
+(execute), and again after Phase 2B finishes, render a readable visual board
+via the `Artifact` tool — a single HTML page, redeployed to the same URL for
+the "before" → "after" update.
+
+**Before calling `Artifact` for the first time in a run, load the
+`artifact-design` skill** (per the tool's own instructions) to calibrate
+layout/design effort — this is a data-dense internal ops board, not a
+polished marketing page; favor a dense, scannable table over heavy visual
+design.
+
+## Pre-fix triage board (after Phase 2A, before Phase 2B)
+
+One row per error that survived `eligibility.py`'s hard 1st-party + threshold
+filter, **plus** a visible section listing what was excluded — auditability
+matters as much as the queue itself.
+
+### Main table — one row per diagnosed candidate
+
+| Column | Content |
+|---|---|
+| Error | error text (truncated) + error_id |
+| Affected Users | from the pull, sorted desc |
+| Root-Cause Hypothesis | one-line `symptom → trigger → root_cause` from Phase 2A's diagnosis |
+| Confidence | `source_confidence / fix_confidence` (e.g. `high/high`, `medium/low`) |
+| Planned Action | `Auto-Fix` or `Report-Only`, color-coded (green / gray) |
+
+Sort by Affected Users descending — matches the eligibility queue order.
+
+### Excluded section (below the main table, collapsible or visually secondary)
+
+Two small lists, not full tables:
+- **Skipped — 3rd-party**: error text + which signal matched (vendor
+  pattern / extension scheme / non-first-party domain / opaque cross-origin).
+- **Skipped — below threshold**: error text + affected users (so it's clear
+  why, e.g. "38 < 100").
+
+### Header summary
+
+Run id, source (browser/token/csv), time window (7 days), total rows seen,
+counts per bucket (eligible / skipped-3rd-party / skipped-below-threshold),
+and a note: *"Planned actions below are not yet executed — this is a preview."*
+
+## Post-run board (redeploy same Artifact after Phase 2B)
+
+Same row set, columns updated to reflect what actually happened:
+
+| Column | Content |
+|---|---|
+| Error | unchanged |
+| Affected Users | unchanged |
+| Outcome | `Fixed` / `Reported` / `Fix Failed → Reported` — color-coded (green / gray / amber) |
+| Detail | for Fixed: MR link; for Reported: one-line reason (low confidence, or test-gate failure) |
+
+### Header summary (updated)
+
+Replace the "preview" note with the actual metrics from `registry.py report`:
+remediation rate vs the 75% target with an explicit verdict, MR coverage of
+auto-fixed (must read 100%), and any blockers (e.g. `glab` missing →
+`auto-fixed-mr-pending` rows called out).
+
+## Rules
+
+- Never omit the excluded/skipped sections — a board that only shows the
+  happy path misrepresents what the pipeline actually did with the full
+  pulled dataset.
+- Keep the same Artifact `file_path`/title across the pre- and post-run
+  render so the second `Artifact` call redeploys to the same URL rather than
+  creating a second page for one run.
+- This Artifact is a human-readable companion to the machine-readable
+  registry + markdown run report ([registry-format.md](./registry-format.md))
+  — it does not replace them; the registry remains the source of truth for
+  the attribution lifecycle and the 75%-target verdict.

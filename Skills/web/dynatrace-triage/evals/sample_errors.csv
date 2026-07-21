@@ -1,0 +1,3 @@
+error.id,❌ Error,🚨 Severity,🧠 Signal,👥 Users,🔁 Count,👨‍💻 Teams,🌐 Top Pages,🌍 Browsers
+0d2c159d985f24ef,undefined is not an object (evaluating 't.documents[0]'),🟡 Medium,Recurring 🔁 LOOP,38,"4,120","Core, Catalog, Central","/, /orders/history/p782wy-7606, /checkout/payment","Safari, Safari mobile, Chrome Mobile"
+261e721354a6680a,TypeError: Cannot read properties of undefined (reading 'currentValue'),🟠 High,Recurring,178,"1,198","Catalog, Core, Payments","/checkout, /checkout/address","Chrome, Chrome Mobile, Android WebView"

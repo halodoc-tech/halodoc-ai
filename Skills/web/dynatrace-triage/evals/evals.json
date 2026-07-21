@@ -1,0 +1,31 @@
+{
+  "skill": "dynatrace-triage",
+  "focus": [
+    "root-cause-first diagnosis",
+    "confidence-based delivery decisions",
+    "canonical MR body formatting",
+    "smallest-correct-fix selection",
+    "auto-heal batch pipeline: live/CSV acquisition, hard 1st-party filtering, pre-fix visualization, no-approval fixes, MR-per-error, attribution registry"
+  ],
+  "sample_prompts": [
+    "use this skill to fix 0d2c159d985f24ef",
+    "summarize the highest-risk recurring Dynatrace frontend errors",
+    "investigate this Safari undefined-property crash and produce a reviewer-grade fix summary",
+    "heal ./errors.csv",
+    "run auto-heal on this Dynatrace export and show the remediation rate",
+    "batch fix this Dynatrace CSV against my-web-frontend",
+    "heal --source browser",
+    "pull the latest browser exceptions from Dynatrace and auto-fix the high-impact ones"
+  ],
+  "heal_mode_expected_behavior": [
+    "before touching Dynatrace, resolves the data source: CSV path given, or asks token vs. browser if --source isn't specified — never silently defaults",
+    "no human approval prompt for eligible high-confidence fixes; only allowed stops are a dirty git tree and the Phase -1 source choice",
+    "1st-party is a HARD filter (extraction-time domain/vendor check, then evidence-stage stack check) — 3rd-party errors never enter the fix queue on a 'suspected' basis, but are still shown excluded on the visualization",
+    "only errors with >=100 affected users AND confirmed 1st-party enter the fix queue, over a 7-day rolling window",
+    "renders a pre-fix triage board (Artifact) showing every candidate's planned action before any code changes, plus excluded/skipped rows",
+    "each fix branch is cut from freshly fetched origin/master (verified via merge-base) and produces exactly one MR",
+    "test gate before every MR: reproducing spec + eslint + targeted ChromeHeadlessCI run; retry once then downgrade to reported",
+    "low-confidence errors get a triage writeup in the registry, no branch, no MR",
+    "run ends with the registry finalized, the visualization redeployed showing fixed/not-fixed, and a report showing remediation rate vs the 75% target"
+  ]
+}
