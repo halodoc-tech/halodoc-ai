@@ -43,15 +43,23 @@ def now():
 
 def load(path):
     p = Path(path)
-    if p.exists():
+    if not p.exists():
+        return {"runs": [], "errors": {}}
+    try:
         return json.loads(p.read_text(encoding="utf-8"))
-    return {"runs": [], "errors": {}}
+    except json.JSONDecodeError as exc:
+        print(f"corrupted registry file {p}: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 def save(path, data):
+    """Atomic write: write to a sibling .tmp file, then rename — a crash or
+    interrupt mid-write never leaves the registry half-written/corrupted."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(p)
 
 
 def find_run(data, run_id):
@@ -261,8 +269,15 @@ def load_fresh_ids(path):
     canonical JSON row list (error_id key), detected by file extension."""
     p = Path(path)
     if p.suffix.lower() == ".json":
-        data = json.loads(p.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            print(f"malformed JSON in {p}: {exc}", file=sys.stderr)
+            raise SystemExit(1)
         rows = data.get("rows", data) if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            print(f"'rows' in {p} must be a list, got {type(rows).__name__}", file=sys.stderr)
+            raise SystemExit(1)
         return {str(r.get("error_id") or "").strip() for r in rows if r.get("error_id")}
     with p.open(newline="", encoding="utf-8-sig") as handle:
         return {

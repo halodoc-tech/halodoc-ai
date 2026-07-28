@@ -178,9 +178,20 @@ def load_csv_rows(csv_path):
     return rows
 
 
+class InputError(Exception):
+    """Malformed input — caller prints the message to stderr and exits 1."""
+
+
 def load_json_rows(json_path):
-    data = json.loads(json_path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise InputError(f"malformed JSON in {json_path}: {exc}") from exc
+    if not isinstance(data, (list, dict)):
+        raise InputError(f"expected a JSON list or {{'rows': [...]}} object in {json_path}, got {type(data).__name__}")
     rows = data.get("rows", data) if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        raise InputError(f"'rows' in {json_path} must be a list, got {type(rows).__name__}")
     return [normalize_json_row(row) for row in rows if (row.get("error_id") or "").strip()]
 
 
@@ -230,18 +241,25 @@ def main():
 
     first_party_domains = args.first_party_domains
 
-    if args.json:
-        if not args.json.exists():
-            print(f"file not found: {args.json}", file=sys.stderr)
-            return 1
-        input_path = args.json
-        normalized_rows = load_json_rows(args.json)
-    else:
-        if not args.csv_path.exists():
-            print(f"file not found: {args.csv_path}", file=sys.stderr)
-            return 1
-        input_path = args.csv_path
-        normalized_rows = load_csv_rows(args.csv_path)
+    try:
+        if args.json:
+            if not args.json.exists():
+                print(f"file not found: {args.json}", file=sys.stderr)
+                return 1
+            input_path = args.json
+            normalized_rows = load_json_rows(args.json)
+        else:
+            if not args.csv_path.exists():
+                print(f"file not found: {args.csv_path}", file=sys.stderr)
+                return 1
+            input_path = args.csv_path
+            normalized_rows = load_csv_rows(args.csv_path)
+    except InputError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except (UnicodeDecodeError, csv.Error) as exc:
+        print(f"malformed input file: {exc}", file=sys.stderr)
+        return 1
 
     result = build_result(input_path, normalized_rows, args.min_users, first_party_domains)
 

@@ -1,5 +1,10 @@
 # Workflow
 
+## Contents
+
+- [Mode 1: High-Confidence Fix](#mode-1-high-confidence-fix)
+- [Mode 2: Strategic Summary](#mode-2-strategic-summary)
+
 ## Mode 1: High-Confidence Fix
 
 ### Step 0: Detect git provider and sync base branch
@@ -68,7 +73,10 @@ When editing:
 1. read the whole target file
 2. read the spec file and sibling implementation if needed
 3. apply the smallest change that fixes the root cause
-4. add or update focused tests for:
+4. before adding tests, read the existing spec file in full — if a test
+   already covers the failure path (even partially), update it rather than
+   duplicating
+5. add or update focused tests for:
    - reproduced failure path
    - normal success path
    - boundary/null/undefined path when relevant
@@ -119,6 +127,9 @@ Are you satisfied with this fix? (yes/no)
 ```bash
 git checkout -b fix/error-${error_id}-${error_context}
 pnpm eslint <changed-files>
+pnpm build   # or `tsc --noEmit` / the project's typecheck script — lint and
+             # unit tests alone can miss a type error or build break outside
+             # the touched spec file
 pnpm test -- --include="**/<changed-spec>.spec.ts" --watch=false --browsers=ChromeHeadlessCI
 git status --short
 git add <changed-files>

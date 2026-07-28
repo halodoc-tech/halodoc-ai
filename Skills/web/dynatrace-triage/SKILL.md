@@ -2,13 +2,13 @@
 name: dynatrace-triage
 version: "1.0.0"
 maintainer: "halodoc-ai"
-description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Use when you want deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors — trigger on "fix this Dynatrace error", "why is this Dynatrace crash happening", "investigate this production error", or a specific error id. Also supports a strategic summary mode — trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes", "remediation roadmap for these errors". Also supports an auto-healing batch pipeline — trigger with "auto-heal", "batch fix Dynatrace errors", or "heal" only when paired with "Dynatrace"/"auto-heal" explicitly (bare "heal" alone is ambiguous, especially in health-related products) — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, not native mobile crashes, not non-Dynatrace error sources.
+description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors — trigger on "fix this Dynatrace error", "why is this Dynatrace crash happening", "investigate this production error", or a specific error id. Also supports a strategic summary mode — trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes", "remediation roadmap for these errors". Also supports an auto-healing batch pipeline — trigger with "auto-heal", "batch fix Dynatrace errors", or "heal" only when paired with "Dynatrace"/"auto-heal" explicitly (bare "heal" alone is ambiguous, especially in health-related products) — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, not native mobile crashes, not non-Dynatrace error sources.
 compatibility: Claude Code only — requires direct repo filesystem access and bash tools
 ---
 
 # Dynatrace Triage
 
-Use this skill when the user wants a high-confidence fix or reviewer-grade triage for Dynatrace client-side errors on your web frontend.
+Provides a high-confidence fix or reviewer-grade triage for Dynatrace client-side errors on your web frontend.
 
 ## Configure for your project
 
@@ -50,13 +50,13 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - For auto-heal targeting rules (users threshold, hard 1st/3rd-party filter): read [eligibility.md](./references/eligibility.md)
 - For pulling errors live via an authenticated Chrome session: read [live-pull.md](./references/live-pull.md)
 - For pulling errors live via `DT_API_TOKEN`/DQL: read [token-pull.md](./references/token-pull.md)
-- For the pre-fix triage board and post-run fixed/not-fixed board: read [visualization.md](./references/visualization.md)
-- For checking/enabling production sourcemaps in any web project: read [sourcemap-preflight.md](./references/sourcemap-preflight.md)
+- For the pre-fix triage board and post-run fixed/not-fixed board: read [visualization.md](./references/visualization.md) — rendered as Claude Code HTML Artifacts (a scannable table, color-coded by planned action/outcome), redeployed to the same URL between the pre- and post-run render
+- For checking/enabling production sourcemaps in any web project: read [sourcemap-preflight.md](./references/sourcemap-preflight.md) — a read/write check: if sourcemaps are already enabled it's a no-op; if disabled, it applies the smallest config edit on its own dedicated branch/MR (never mixed into an error-fix branch, and never silently modifying the repo without a reviewable MR)
 - For the attribution registry schema and run report: read [registry-format.md](./references/registry-format.md)
 - For CSV parsing or reusable row extraction: use [parser.py](./scripts/parser.py)
 - For auto-heal work-queue filtering: use [eligibility.py](./scripts/eligibility.py)
 - For attribution registry init/update/report/verify: use [registry.py](./scripts/registry.py)
-- For quick script usage notes: read [README.md](./scripts/README.md)
+- For quick script usage notes and error-handling conventions: read [README.md](./scripts/README.md) — scripts require Python 3 only (stdlib, no `pip install` needed)
 - For sample eval prompts and expected behavior baselines: inspect [evals.json](./evals/evals.json) and [sample_errors.csv](./evals/sample_errors.csv) only when validating the skill itself
 
 ## Operating Rules

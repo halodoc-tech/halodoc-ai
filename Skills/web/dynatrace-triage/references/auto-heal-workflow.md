@@ -277,6 +277,20 @@ gh pr create --head fix/error-<id>-<kebab-context> --base master \
 - Correct CLI (`glab`/`gh`) missing → push anyway, record the ready-to-run
   create command in the registry note, status `auto-fixed-mr-pending`.
 
+**Other `glab`/`gh` failures** (the CLI is present but the create command
+itself fails):
+- **Network timeout / transient API error**: retry once after 5s. If still
+  failing, record `auto-fixed-mr-pending` with the exact create command and
+  the error message — continue the batch.
+- **Permission denied** ("not authorized to create merge/pull requests"):
+  record `auto-fixed-mr-pending` with the error; do NOT retry (permission
+  won't change mid-run). Call this out as a blocker in the Phase 3 report.
+- **Branch already has an open MR/PR**: this is already handled by the
+  branch-reuse check in step 2 above, before reaching this point.
+- **Rate limited (HTTP 429)**: wait 60s, retry once. If still rate-limited,
+  record `auto-fixed-mr-pending` with the error and call it out as a
+  blocker — don't keep retrying and burn the rest of the batch's time.
+
 ### Failure isolation
 
 Any unexpected failure while processing an error (sourcemap fetch, tooling
@@ -302,14 +316,21 @@ Print the markdown report inline. It must show:
 - MR coverage of auto-fixed (must be 100%; less is a defect line)
 - all outcome tables (auto-fixed / reported / skipped-3rd-party /
   skipped-below-threshold) so the pulled row count reconciles visibly
-- blockers (e.g. `glab` missing) at the top
+- blockers (e.g. `glab` missing, MR creation permission/rate-limit issues) at
+  the top
+
+**Post-run audit (recommended, not blocking)**: if the batch auto-fixed
+multiple errors, run `pnpm build` and compare bundle sizes (main chunk, lazy
+chunks) against the pre-run baseline. If total bundle size grew >5% or any
+chunk grew >10%, note it in the report and flag the fixed files for a
+follow-up audit — a batch of individually-small fixes can add up.
 
 ## Phase 4: Resolution verification (later runs)
 
 When a heal run happens against a fresh pull:
 
 ```bash
-python3 scripts/registry.py verify <registry> --run-id <new_run_id> --fresh-csv <fresh-source>
+python3 scripts/registry.py verify <registry> --run-id <new_run_id> --fresh-source <fresh-source>
 ```
 
 - prior `auto-fixed*` entry absent from the fresh pull → `resolved-verified`

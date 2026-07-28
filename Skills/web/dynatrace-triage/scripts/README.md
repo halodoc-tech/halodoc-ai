@@ -1,5 +1,26 @@
 # Dynatrace Triage Scripts
 
+**No dependencies required.** All scripts use Python 3 standard library only
+(`argparse`, `csv`, `json`, `pathlib`, `re`, `datetime`) — no `pip install`
+needed.
+
+## Error handling conventions
+
+- **Malformed CSV/JSON input**: a clean one-line message on stderr + exit
+  code 1 — never a raw traceback. `eligibility.py --json` rejects invalid
+  JSON, and a `rows`/list shape that doesn't match the canonical schema.
+- **Corrupted `registry.json`**: `registry.py` reports the parse error and
+  exits 1 rather than silently starting from an empty registry (which would
+  quietly lose prior attribution history).
+- **Atomic writes**: `registry.py` writes to a sibling `.tmp` file and
+  renames it into place — a crash or interrupt mid-write can never leave
+  `registry.json` half-written/corrupted.
+- **Mode 3 batch contract**: a script exiting non-zero for one error is
+  treated the same as any other pipeline failure — `registry.py update …
+  --status reported --note "pipeline-error: <summary>"`, then the batch
+  continues with the next error (see `auto-heal-workflow.md`'s Failure
+  isolation section). It is never silently skipped without a registry entry.
+
 ## parser.py
 
 Extract a single CSV row by `error.id`:
@@ -21,12 +42,10 @@ Filter a Dynatrace Error Inspector CSV — or a canonical JSON row list from a
 live browser/token pull — into an auto-heal work queue:
 
 ```bash
-python3 eligibility.py /path/to/errors.csv --first-party-domain example.com --min-users 100 --out queue.json
+python3 eligibility.py /path/to/errors.csv --min-users 100 --out queue.json
 # or, for live-pulled rows (see references/live-pull.md / token-pull.md):
-python3 eligibility.py --json /path/to/rows.json --first-party-domain example.com --min-users 100 --out queue.json
+python3 eligibility.py --json /path/to/rows.json --min-users 100 --first-party-domain example.com --out queue.json
 ```
-
-`--first-party-domain` is **required** — pass your own site's domain(s), repeating the flag for multiple.
 
 Emits eligible errors (confirmed 1st-party AND users >= threshold) sorted by
 affected users descending, plus skipped rows with reasons
