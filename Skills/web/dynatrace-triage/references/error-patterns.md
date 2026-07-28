@@ -4,6 +4,22 @@ Use this file for quick source mapping, root-cause framing, and fix-shape hints 
 
 Prefer fixes that restore the intended contract or lifecycle. Do not treat optional chaining, `ngSkipHydration`, or global error logging as the real fix unless the value or workaround is valid by design.
 
+## Contents
+
+- [Null / undefined property access](#null--undefined-property-access)
+- [Input contract and lifecycle ordering](#input-contract-and-lifecycle-ordering)
+- [SSR / browser-only failures](#ssr--browser-only-failures)
+- [Hydration mismatch and direct DOM manipulation](#hydration-mismatch-and-direct-dom-manipulation)
+- [Unhandled async errors and callsite handling](#unhandled-async-errors-and-callsite-handling)
+- [Subscription / lifecycle leakage](#subscription--lifecycle-leakage)
+- [Collection tracking and list identity](#collection-tracking-and-list-identity)
+- [Template diagnostic patterns](#template-diagnostic-patterns-that-often-become-runtime-bugs)
+- [Forms and control wiring issues](#forms-and-control-wiring-issues)
+- [Dependency injection and provider contract issues](#dependency-injection-and-provider-contract-issues)
+- [Change-detection and expression-stability problems](#change-detection-and-expression-stability-problems)
+- [Source mapping prompts](#source-mapping-prompts)
+- [Audit prompts](#audit-prompts)
+
 ## Null / undefined property access
 
 Signals:
@@ -80,6 +96,7 @@ Preferred fixes:
 - replace native DOM creation/mutation with Angular template or view APIs
 - stop CDN or post-processing steps from rewriting SSR HTML
 - isolate the component and use `ngSkipHydration` only when the component cannot yet be made hydration-safe
+- never introduce `innerHTML`/`outerHTML` assignment of unsanitized dynamic content while fixing this — a fix here must go through Angular's `DomSanitizer` or template binding, never raw string interpolation into the DOM
 
 ## Unhandled async errors and callsite handling
 

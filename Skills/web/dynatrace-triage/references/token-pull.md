@@ -12,6 +12,14 @@ If your org already has backend error-triage tooling that queries Dynatrace's
 for auth/retry/polling — but it queries the wrong bucket for browser/RUM
 exceptions, so it can't be reused directly for this path.
 
+## Contents
+
+- [Why this needs a discovery step first](#why-this-needs-a-discovery-step-first)
+- [Procedure](#procedure)
+- [Cost discipline](#4-cost-discipline)
+- [Explicitly out of scope for this path](#explicitly-out-of-scope-for-this-path)
+- [Relationship to the browser path](#relationship-to-the-browser-path)
+
 ## Why this needs a discovery step first
 
 There is usually no ready-made DQL schema for browser/RUM JavaScript
@@ -24,9 +32,13 @@ Confirm the real schema once, cheaply, before building the real query.
 ### 1. Preconditions
 
 ```bash
-[ -z "$DT_API_TOKEN" ] && source ~/.zshrc
-[ -z "$DT_API_TOKEN" ] && echo "DT_API_TOKEN not set" >&2 && exit 1
+[ -z "$DT_API_TOKEN" ] && [ -f ~/.zshrc ] && source ~/.zshrc
+[ -z "$DT_API_TOKEN" ] && echo "DT_API_TOKEN not set — set it in your shell profile or CI secret" >&2 && exit 1
 ```
+
+(The `~/.zshrc` source is a convenience for local macOS/zsh shells only — on
+Linux/CI, set `DT_API_TOKEN` directly as an env var or CI secret; the
+`[ -f ... ]` guard avoids a spurious "no such file" error when it's absent.)
 
 If missing: report the blocker and offer to fall back to the browser path
 ([live-pull.md](./live-pull.md)) — do not prompt repeatedly.

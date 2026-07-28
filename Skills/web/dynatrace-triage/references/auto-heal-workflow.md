@@ -8,18 +8,29 @@ are report-only. All outcomes land in the attribution registry
 ([registry-format.md](./registry-format.md)) and a readable visual board
 ([visualization.md](./visualization.md)).
 
-Command: `dynatrace_triage heal [--csv <path> | --source token|browser] [--repo <path>] [--min-users 100] [--dry-run]`
+Command: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
 Read before acting: [live-pull.md](./live-pull.md), [token-pull.md](./token-pull.md),
 [eligibility.md](./eligibility.md), [visualization.md](./visualization.md),
 [architecture-rules.md](./architecture-rules.md), [mr-format.md](./mr-format.md),
 [sourcemap-preflight.md](./sourcemap-preflight.md).
 
+## Contents
+
+- [Phase -1: Data source selection](#phase--1-data-source-selection)
+- [Phase 0: Preconditions](#phase-0-preconditions)
+- [Phase 1: Build the work queue](#phase-1-build-the-work-queue)
+- [Phase 2A: Diagnose all](#phase-2a-diagnose-all-no-side-effects)
+- [Visualize](#visualize-between-2a-and-2b)
+- [Phase 2B: Execute planned actions](#phase-2b-execute-planned-actions)
+- [Phase 3: Finalize](#phase-3-finalize)
+- [Phase 4: Resolution verification](#phase-4-resolution-verification-later-runs)
+
 Set once per run:
 
 ```text
 run_id   = heal-<YYYY-MM-DD>-<n>
-registry = ~/.claude/dynatrace-triage-workspace/<repo-name>/registry.json
+registry = ${REGISTRY_PATH:-~/.claude/dynatrace-triage-workspace/<repo-name>}/registry.json
 ```
 
 ## Phase -1: Data source selection
@@ -40,6 +51,12 @@ accordingly. Both must emit the same canonical row JSON
 identical regardless of path. If the chosen path hits a hard blocker (token
 rejected, schema undiscoverable, no browser session), report it and offer to
 fall back to one of the other two — never silently guess.
+
+**Sanity-check the domain pairing**: confirm `--first-party-domain` actually
+corresponds to the same site as the Dynatrace `Frontend` filter being pulled
+(e.g. domain `shop.example.com` should not be paired with a Frontend named
+`blog-prod`). If they look unrelated, ask before proceeding — a mismatched
+pair silently misclassifies every row in `eligibility.py`.
 
 ## Phase 0: Preconditions
 
@@ -155,7 +172,20 @@ git reset --hard origin/master
 git clean -fd
 ```
 
-#### 2. Branch from latest master — verified
+#### 2. Check for an existing open MR before reusing the branch name
+
+```bash
+glab mr list --source-branch fix/error-<id>-<kebab-context> 2>/dev/null
+# GitHub: gh pr list --head fix/error-<id>-<kebab-context>
+```
+
+If an open MR already exists on that exact branch name (e.g. a prior run
+pushed it but it's still under review), do NOT force-reset it — skip this
+error, `registry.py update … --status auto-fixed-mr-pending --note "already has an open MR from a prior run: <url>"`,
+and continue to the next error. Only proceed to step 3 when no open MR exists
+on that branch.
+
+#### 3. Branch from latest master — verified
 
 ```bash
 git fetch origin master
@@ -172,7 +202,23 @@ Then apply the smallest correct fix per [workflow.md](./workflow.md) Step 5
 and [error-patterns.md](./error-patterns.md), using the diagnosis already
 produced in Phase 2A (do not re-diagnose from scratch).
 
-#### 3. Test gate — mandatory before any MR
+#### 4. Detect the project's test/lint/build commands
+
+Before running any hardcoded command, confirm the target repo actually uses
+them — check `package.json`'s `scripts` block and lockfile:
+
+```bash
+cat package.json | grep -A1 '"scripts"'
+ls pnpm-lock.yaml yarn.lock package-lock.json 2>/dev/null
+```
+
+If the repo isn't Angular+pnpm (no `pnpm-lock.yaml`, no `ng` in devDependencies,
+or the expected `lint`/`test`/`build` scripts are absent), **stop and report
+the blocker** — `registry.py update … --status reported --note "pipeline-error: unsupported_test_stack: <what was detected>"`
+— rather than running the Angular/pnpm commands below against an incompatible
+project.
+
+#### 5. Test gate — mandatory before any MR
 
 1. **Reproduce**: the new/updated spec must cover the failure path — it should
    fail against the pre-fix code and pass with the fix. When practical, verify
@@ -180,39 +226,56 @@ produced in Phase 2A (do not re-diagnose from scratch).
    restoring (`git stash pop`, expect green). When reproduction isn't
    feasible (e.g. timing-dependent), state why explicitly in the MR body.
 2. **Lint**: `pnpm eslint <changed files>` — clean.
-3. **Tests**: `pnpm test -- --include="**/<changed-spec>.spec.ts" --watch=false --browsers=ChromeHeadlessCI`
+3. **Typecheck/Build**: `pnpm build` (or `ng build --configuration=production` /
+   `tsc --noEmit` — whichever the project provides) — must succeed. Lint and
+   unit tests alone can miss a type error or build break outside the touched
+   spec file; do not open an MR on a repo that no longer builds.
+4. **Tests**: `pnpm test -- --include="**/<changed-spec>.spec.ts" --watch=false --browsers=ChromeHeadlessCI`
    — green, plus the specs of directly-touched sibling components.
 
 Failure policy:
 
-- On lint/test failure: re-diagnose and retry ONCE (adjust fix or test).
+- On lint/build/test failure: re-diagnose and retry ONCE (adjust fix or test).
 - Second failure: delete the branch
   (`git checkout master && git branch -D <branch>`), downgrade to
   `reported` with the failure log excerpt in the writeup.
 - Test-infra failure unrelated to the change (e.g. headless Chrome missing):
   counts against the run, not the error — note it globally, fall back to
-  lint-only, mark the registry note `tests-not-run: <reason>`, and surface it
-  prominently in the run report. Never silently skip tests.
+  lint+build-only, mark the registry note `tests-not-run: <reason>`, and
+  surface it prominently in the run report. Never silently skip tests.
 
-#### 4. Commit, push, MR
+#### 6. Commit, push, MR
 
 ```bash
 git add <changed files>
 git commit -m "<scope>: <summary> (dynatrace <error_id>)"
 git push -u origin fix/error-<id>-<kebab-context>
+```
+
+Provider preference (detect via `git remote get-url origin`, matching
+[workflow.md](./workflow.md)'s Mode 1 behavior):
+
+```bash
+# GitLab:
 glab mr create --source-branch fix/error-<id>-<kebab-context> --target-branch master \
   --title "fix(<scope>): <short summary> (<error_id>)" \
   --description "<mr-format.md body + Auto-Heal Attribution block>" \
   --label "auto-heal,dynatrace-triage"
+
+# GitHub:
+gh pr create --head fix/error-<id>-<kebab-context> --base master \
+  --title "fix(<scope>): <short summary> (<error_id>)" \
+  --body "<mr-format.md body + Auto-Heal Attribution block>" \
+  --label "auto-heal,dynatrace-triage"
 ```
 
-- MR body: canonical [mr-format.md](./mr-format.md) body **plus** the
+- MR/PR body: canonical [mr-format.md](./mr-format.md) body **plus** the
   Auto-Heal Attribution block (marker, run id, confidences, duplicate-group
   cross-references). No auto-merge — MRs await human review; "auto-remediated"
   means the fix and MR required no human authoring.
 - Success → `registry.py update … --status auto-fixed --mr-url <url> --branch <b> --branch-point-sha <sha> --confidence-source <s> --confidence-fix <f>`
-- `glab` missing → push anyway, record the ready-to-run `glab mr create`
-  command in the registry note, status `auto-fixed-mr-pending`.
+- Correct CLI (`glab`/`gh`) missing → push anyway, record the ready-to-run
+  create command in the registry note, status `auto-fixed-mr-pending`.
 
 ### Failure isolation
 

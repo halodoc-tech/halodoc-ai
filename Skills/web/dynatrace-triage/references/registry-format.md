@@ -6,7 +6,7 @@ proves the OKR metrics (≥75% remediation rate, 100% MR coverage).
 
 ## Location
 
-Default (recommended — no repo pollution):
+Default for interactive/local use (recommended — no repo pollution):
 
 ```text
 ~/.claude/dynatrace-triage-workspace/<repo-name>/registry.json
@@ -16,6 +16,13 @@ Run reports are written next to it as `report-<run_id>.md`.
 
 Alternative: `<target_repo>/.dynatrace-heal/registry.json` (add to
 `.gitignore`) if the team wants the registry co-located with the repo.
+
+**In non-interactive/CI mode**: the home-relative default is NOT safe — a CI
+runner's `$HOME` is often ephemeral or different per job, so attribution
+history would silently fail to persist across runs. Set the `REGISTRY_PATH`
+env var to a path mounted/persisted across job runs (e.g. a workspace volume
+or artifact cache); `scripts/registry.py` reads it as the default when no
+explicit registry path is passed on the command line.
 
 ## Managed by `scripts/registry.py`
 

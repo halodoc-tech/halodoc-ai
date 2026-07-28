@@ -46,7 +46,13 @@ python3 registry.py update    registry.json --run-id heal-2026-07-03-1 --error-i
     --confidence-source high --confidence-fix high
 python3 registry.py finalize  registry.json --run-id heal-2026-07-03-1
 python3 registry.py report    registry.json --run-id heal-2026-07-03-1
-python3 registry.py verify    registry.json --run-id heal-2026-07-04-1 --fresh-csv fresh.csv
+python3 registry.py verify    registry.json --run-id heal-2026-07-04-1 --fresh-source fresh.csv
 ```
+
+`--fresh-source` accepts either a CSV export or the canonical JSON row list
+(detected by file extension) — `--fresh-csv` is kept as a backward-compatible
+alias. The `registry.json` positional path can be omitted on every subcommand
+if `$REGISTRY_PATH` is set (recommended in CI, where `$HOME` is often
+ephemeral/per-job).
 
 Schema and status lifecycle: `references/registry-format.md`.

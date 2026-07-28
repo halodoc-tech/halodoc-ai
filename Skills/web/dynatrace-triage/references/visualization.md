@@ -62,6 +62,19 @@ remediation rate vs the 75% target with an explicit verdict, MR coverage of
 auto-fixed (must read 100%), and any blockers (e.g. `glab` missing →
 `auto-fixed-mr-pending` rows called out).
 
+## Worked example (one row, pre-fix board)
+
+| Error | Affected Users | Root-Cause Hypothesis | Confidence | Planned Action |
+|---|---|---|---|---|
+| `TypeError: Cannot read properties of undefined (reading 'currentValue')` — `261e721354a6680a` | 178 | `symptom:` ngOnChanges throws on a partial changes object → `trigger:` fast re-render omits an entry → `root_cause:` missing existence guard before dereferencing `currentValue` | high/high | **Auto-Fix** (green) |
+
+Excluded section for the same run:
+
+> **Skipped — 3rd-party**: `Script error.` (1,410 users) — opaque cross-origin;
+> `pagead2.googlesyndication.com/…/adsbygoogle.js:221` (260 users) — vendor
+> pattern + non-first-party domain.
+> **Skipped — below threshold**: `undefined is not an object (evaluating 't.documents[0]')` (38 users) — 38 < 100.
+
 ## Rules
 
 - Never omit the excluded/skipped sections — a board that only shows the

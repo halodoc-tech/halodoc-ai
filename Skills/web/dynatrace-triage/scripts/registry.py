@@ -13,7 +13,7 @@ usage:
   registry.py preflight <registry.json> --run-id ID --result "already-enabled|enabled-in-mr <url>|failed: ..."
   registry.py finalize <registry.json> --run-id ID
   registry.py report  <registry.json> --run-id ID
-  registry.py verify  <registry.json> --run-id ID --fresh-csv PATH
+  registry.py verify  <registry.json> --run-id ID --fresh-source PATH  (CSV or the canonical JSON row list; --fresh-csv also accepted)
 
 Statuses:
   auto-fixed | auto-fixed-mr-pending | reported | skipped-3rd-party |
@@ -22,6 +22,7 @@ Statuses:
 import argparse
 import csv
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -255,15 +256,26 @@ def cmd_report(args):
     return 0
 
 
+def load_fresh_ids(path):
+    """Read the fresh pull's error ids — CSV (error.id column) or the
+    canonical JSON row list (error_id key), detected by file extension."""
+    p = Path(path)
+    if p.suffix.lower() == ".json":
+        data = json.loads(p.read_text(encoding="utf-8"))
+        rows = data.get("rows", data) if isinstance(data, dict) else data
+        return {str(r.get("error_id") or "").strip() for r in rows if r.get("error_id")}
+    with p.open(newline="", encoding="utf-8-sig") as handle:
+        return {
+            (row.get("error.id") or "").strip()
+            for row in csv.DictReader(handle)
+            if (row.get("error.id") or "").strip()
+        }
+
+
 def cmd_verify(args):
     data = load(args.registry)
     find_run(data, args.run_id)
-    fresh_ids = set()
-    with Path(args.fresh_csv).open(newline="", encoding="utf-8-sig") as handle:
-        for row in csv.DictReader(handle):
-            eid = (row.get("error.id") or "").strip()
-            if eid:
-                fresh_ids.add(eid)
+    fresh_ids = load_fresh_ids(args.fresh_source)
     transitions = []
     for eid, entry in data["errors"].items():
         if entry["status"] not in FIXED_STATUSES:
@@ -291,7 +303,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("init")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
     p.add_argument("--csv", required=True)
     p.add_argument("--base-sha", required=True)
@@ -300,7 +313,8 @@ def main():
     p.set_defaults(fn=cmd_init)
 
     p = sub.add_parser("update")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
     p.add_argument("--error-id", required=True)
     p.add_argument("--status", required=True)
@@ -316,28 +330,45 @@ def main():
     p.set_defaults(fn=cmd_update)
 
     p = sub.add_parser("preflight")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
     p.add_argument("--result", required=True)
     p.set_defaults(fn=cmd_preflight)
 
     p = sub.add_parser("finalize")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
     p.set_defaults(fn=cmd_finalize)
 
     p = sub.add_parser("report")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
     p.set_defaults(fn=cmd_report)
 
     p = sub.add_parser("verify")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
-    p.add_argument("--fresh-csv", required=True)
+    p.add_argument("--fresh-source", "--fresh-csv", dest="fresh_source", required=True,
+                    help="CSV export or canonical JSON row list from the latest pull")
     p.set_defaults(fn=cmd_verify)
 
     args = ap.parse_args()
+    if not args.registry:
+        env_dir = os.environ.get("REGISTRY_PATH")
+        if not env_dir:
+            print(
+                "registry path required: pass it as the first argument, or set "
+                "$REGISTRY_PATH (e.g. REGISTRY_PATH=/persisted/ci/workspace) — "
+                "the home-relative default is not safe in CI, where $HOME may be "
+                "ephemeral or different per job",
+                file=sys.stderr,
+            )
+            return 2
+        args.registry = str(Path(env_dir) / "registry.json")
     return args.fn(args)
 
 

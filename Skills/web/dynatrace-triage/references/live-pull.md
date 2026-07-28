@@ -7,6 +7,13 @@ required. This is one of the three acquisition paths chosen in Phase -1 of
 [auto-heal-workflow.md](./auto-heal-workflow.md) (the other two: `token-pull.md`,
 manual CSV).
 
+## Contents
+
+- [When to use this path](#when-to-use-this-path)
+- [Procedure](#procedure)
+- [Explicitly out of scope for this path](#explicitly-out-of-scope-for-this-path)
+- [Future v2 note](#future-v2-note)
+
 ## When to use this path
 
 - No `DT_API_TOKEN` is configured, or the user prefers not to provision one

@@ -2,7 +2,7 @@
 name: dynatrace-triage
 version: "1.0.0"
 maintainer: "halodoc-ai"
-description: Senior Frontend Architect skill for high-confidence Dynatrace CSV diagnosis and durable remediation on any Angular/JS web frontend. Use when you want deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors. Also supports an auto-healing batch pipeline — trigger with "heal", "auto-heal", or "batch fix Dynatrace errors" — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry.
+description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Use when you want deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors — trigger on "fix this Dynatrace error", "why is this Dynatrace crash happening", "investigate this production error", or a specific error id. Also supports a strategic summary mode — trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes", "remediation roadmap for these errors". Also supports an auto-healing batch pipeline — trigger with "auto-heal", "batch fix Dynatrace errors", or "heal" only when paired with "Dynatrace"/"auto-heal" explicitly (bare "heal" alone is ambiguous, especially in health-related products) — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, not native mobile crashes, not non-Dynatrace error sources.
 compatibility: Claude Code only — requires direct repo filesystem access and bash tools
 ---
 
@@ -29,6 +29,12 @@ supply your own values before running Mode 3:
 - require explicit `symptom`, `trigger`, and `root_cause`
 - use source/fix confidence before auto-delivery
 - produce a consistent reviewer-facing MR body
+
+## Scope
+
+Dynatrace-sourced browser/client-side errors only. This skill does NOT
+handle: backend 5xx/4xx (a separate skill should own that), native mobile
+crashes, or errors from a monitoring source other than Dynatrace.
 
 ## Progressive Loading
 
@@ -103,7 +109,7 @@ Then:
 
 ### Mode 3: Auto-Heal Batch
 
-Command pattern: `dynatrace_triage heal [--csv <path> | --source token|browser] [--repo <path>] [--min-users 100] [--dry-run]`
+Command pattern: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
 Read these before acting:
 - [auto-heal-workflow.md](./references/auto-heal-workflow.md)
