@@ -2,6 +2,14 @@
 
 Use this canonical MR/PR body. Keep the v1-style `Error` section and stack trace, but include reviewer-grade reasoning sections as part of the standard body.
 
+## Contents
+
+- [Canonical Body Template](#canonical-body-template)
+- [Auto-Heal Attribution](#auto-heal-attribution-mode-3-only)
+- [Worked example](#worked-example-mode-3-filled-in)
+
+## Canonical Body Template
+
 ```text
 Title: fix(<scope>): <short summary> (<error_id>)
 
@@ -105,7 +113,7 @@ Title: fix(order-summary): guard SimpleChanges before reading currentValue (261e
 - **Runtime error:** TypeError: Cannot read properties of undefined (reading 'currentValue')
 - **Affected users:** 178
 - **Occurrence count:** 1,198
-- **Impacted teams:** Catalog, Core, Payments
+- **Impacted teams:** Pharmacy, Core, Insurance
 - **Top pages:**
   - /checkout
   - /checkout/address

@@ -36,19 +36,32 @@ Dynatrace-sourced browser/client-side errors only. This skill does NOT
 handle: backend 5xx/4xx (a separate skill should own that), native mobile
 crashes, or errors from a monitoring source other than Dynatrace.
 
+**Limitations:**
+- GitLab-only for MR creation (`glab`) with a GitHub (`gh`) fallback — no
+  Bitbucket support.
+- Requires Python 3, bash, and git; the `glab`/`gh` CLI is optional (its
+  absence is a recorded blocker, not a hard stop).
+- Live-pull modes (`--source token`/`--source browser`) depend on
+  Dynatrace API/browser-UI data shapes that may evolve without notice —
+  see [token-pull.md](./references/token-pull.md)'s schema-discovery step.
+  **CSV export is the most stable data source**; if a live-pull run hits
+  schema errors, fall back to CSV.
+- The 75% remediation target is a heuristic default, not a hard
+  requirement — adjust to your team's SLA.
+
 ## Progressive Loading
 
 Keep this file as the orchestrator. Load only the extra files you need.
 
 | Resource | Lines | When to load |
 |---|---|---|
-| [workflow.md](./references/workflow.md) | 163 | Mode 1/2 end-to-end flow |
+| [workflow.md](./references/workflow.md) | 168 | Mode 1/2 end-to-end flow |
 | [architecture-rules.md](./references/architecture-rules.md) | 87 | Fix selection and confidence scoring |
-| [mr-format.md](./references/mr-format.md) | 152 | The canonical MR body format |
+| [mr-format.md](./references/mr-format.md) | 160 | The canonical MR body format |
 | [error-patterns.md](./references/error-patterns.md) | 239 | Common Angular error patterns and source mapping hints |
 | [module-map.md](./references/module-map.md) | 26 | Module/page routing hints |
 | [sourcemaps.md](./references/sourcemaps.md) | 106 | Deobfuscating minified `<your-domain>/resources/*.js` frames |
-| [auto-heal-workflow.md](./references/auto-heal-workflow.md) | 380 | Mode 3 batch pipeline (load early for any heal run) |
+| [auto-heal-workflow.md](./references/auto-heal-workflow.md) | 394 | Mode 3 batch pipeline (load early for any heal run) |
 | [eligibility.md](./references/eligibility.md) | 120 | Auto-heal targeting rules (users threshold, hard 1st/3rd-party filter) |
 | [live-pull.md](./references/live-pull.md) | 123 | Pulling errors live via an authenticated Chrome session |
 | [token-pull.md](./references/token-pull.md) | 135 | Pulling errors live via `DT_API_TOKEN`/DQL |
@@ -69,7 +82,7 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - Never claim the root cause is fixed unless the contract/lifecycle/state issue is addressed.
 - Never edit vendor files, `dist/`, `node_modules/`, or generated output.
 - Auto-apply, commit, push, and open an MR only when source confidence is not low and fix confidence is high or medium with explicit assumptions.
-- In heal mode (Mode 3), that confidence rule IS the approval gate — never prompt the human for eligible high-confidence fixes; the only allowed human stop is a dirty git tree.
+- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes; the only allowed human stop is a dirty git tree. **Exception**: IDE/restricted-environment users following the Portability Note workaround manually run the eligibility script and review the resulting work queue before invoking the fixing phase — that's a deliberate preview step made necessary by the environment's restrictions, not a contradiction of "no approval gate" (which describes the fixing phase itself, run inside Claude Code either way).
 - In heal mode, one error's failure never aborts the batch: record it in the registry, reset to clean master, continue.
 - In heal mode, every auto-fixed error must produce exactly one MR from a branch provably cut from latest `origin/master`, and every non-fixed eligible error must appear in the run report with a triage writeup. Never widen the confidence gate to reach the remediation-rate target.
 - In heal mode, 1st-party is a HARD filter applied before anything else — 3rd-party errors (ad/analytics scripts, browser extensions, opaque cross-origin) never enter the fix queue on a "suspected" basis, but they are still shown (excluded, with reason) on the pre-fix visualization for auditability.
@@ -89,10 +102,19 @@ scripts and run them manually outside the restricted environment, then
 bring the results into a Claude Code session for the fixing phase:
 
 ```bash
+# Linux/macOS:
 cd /path/to/your/frontend-repo
-python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv --first-party-domain <your-domain> --min-users 100 --out queue.json
-# then invoke this skill in Claude Code, pointing it at queue.json, for diagnosis/fix/MR
+python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
+  --first-party-domain <your-domain> --min-users 100 --out queue.json
+
+# Windows (PowerShell):
+cd C:\path\to\your\frontend-repo
+python3 C:\path\to\dynatrace-triage\scripts\eligibility.py errors.csv `
+  --first-party-domain <your-domain> --min-users 100 --out queue.json
 ```
+
+Then invoke this skill in Claude Code, pointing it at `queue.json`, for the
+diagnosis/fix/MR phase.
 
 This gives restricted-environment users the eligibility-filtering and
 registry tooling even when full auto-fix orchestration requires Claude Code.
@@ -108,6 +130,15 @@ registry tooling even when full auto-fix orchestration requires Claude Code.
 **Auto-fix gate (Mode 3)**: high source + high fix, OR medium source +
 medium fix with assumptions. Low confidence on either axis → report-only,
 never a guess. Full rubric and fix-hierarchy: [architecture-rules.md](./references/architecture-rules.md).
+
+**Example**: error `Cannot read properties of undefined (reading 'push')`
+at `<your-domain>/resources/chunk-123.js:5:234`. The stack shows function
+name `navigateToCart`, the top page is `/cart`, and the error property
+(`push`) matches a router/history operation. That's 2 aligned signals
+(function name + page routing) → **high source confidence**. The fix
+restores the router's initialization in the cart page's lifecycle, with a
+test reproducing the crash → **high fix confidence** → eligible for
+auto-fix.
 
 ## Modes
 
@@ -147,6 +178,10 @@ Then:
 
 Command pattern: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
+**CI users:** set `REGISTRY_PATH=/workspace/registry.json` (or any
+persistent path) to override the default `~/.claude/…` location, which
+doesn't survive an ephemeral CI home.
+
 Read these before acting:
 - [auto-heal-workflow.md](./references/auto-heal-workflow.md)
 - [live-pull.md](./references/live-pull.md) / [token-pull.md](./references/token-pull.md) (per chosen source)
@@ -156,18 +191,29 @@ Read these before acting:
 - [mr-format.md](./references/mr-format.md)
 
 Then:
-1. **Phase -1**: resolve the data source (CSV given → use it; else `--source` or ask token vs. browser) BEFORE touching Dynatrace.
+1. **Phase -1**: resolve the data source. **Recommended default: CSV
+   export** — most stable, no credential setup, and the safest choice for
+   anyone unfamiliar with the live-pull paths' schema risk (see
+   Limitations above). Use `--source browser` or `--source token` only
+   when fresher-than-latest-export data is genuinely needed. If a CSV path
+   is given → use it directly; else read `--source`, or ask (token vs.
+   browser) if neither is specified — BEFORE touching Dynatrace.
 2. Run Phase 0 preconditions (clean tree, latest master, sourcemap preflight, registry init).
 3. Pull errors via the chosen path (7-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row.
 4. **Phase 2A**: diagnose every eligible error (evidence, confidence, planned action) with no side effects yet.
-5. **Visualize**: render the pre-fix triage board (Artifact) showing every candidate's plan, plus excluded/skipped rows for audit — this is a preview only.
+5. **Visualize**: render the pre-fix triage board (Artifact) showing every candidate's plan, plus excluded/skipped rows for audit. **This is your last chance to review the plan before execution** — inspect the board, sanity-check the confidence scores and planned actions, then proceed to Phase 2B. Use `--dry-run` to stop here without executing anything.
 6. **Phase 2B**: execute the planned actions — confidence gate replaces the human approval prompt; low confidence → report-only; high/medium-with-assumptions → branch/fix/test/MR.
-7. Finalize: `scripts/registry.py finalize` + `report`, redeploy the visualization as the post-run board, print the run report with the 75%-target verdict.
+7. Finalize: `scripts/registry.py finalize` + `report`, redeploy the visualization as the post-run board, print the run report with the 75%-target verdict (a heuristic — high-confidence fixes should resolve roughly 3/4 of eligible-user-volume; adjust to your team's SLA if 75% isn't the right bar).
 8. Never ask for approval unless the git tree is dirty; `glab` missing is a recorded blocker, not a stop.
 
 ## Delivery Expectations
 
-Before proposing delivery, always be able to answer:
+Before proposing delivery, verify:
+- **Build succeeds**: `pnpm build` (or `ng build --configuration=production` / `tsc --noEmit` — whichever the project provides) completes without errors
+- **Lint passes**: `pnpm eslint <changed files>` shows no new violations
+- **Tests pass**: the focused spec covering the failure path is green
+
+Then, always be able to answer:
 - What was the runtime symptom?
 - What exact path triggered it?
 - What is the actual root cause?

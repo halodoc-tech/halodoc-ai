@@ -373,6 +373,20 @@ count actually dropped — run it proactively:
    the next heal run rather than assuming the original fix simply needs
    more time.
 
+**Rollback**: if post-deploy verification shows the error persisting at
+volume (root cause misdiagnosed) or a new regression the fix introduced:
+
+```bash
+git revert <merge-commit-sha>   # via the merge commit on master
+# or use the Git host's "Revert" button on the merged MR
+python3 scripts/registry.py update <registry> --run-id <run_id> --error-id <eid> \
+  --status reverted --note "<why: e.g. 'persisted at 95% of original volume post-deploy'>"
+```
+
+Then re-diagnose with the new evidence (the fix that didn't work, plus the
+persisting error) before attempting a second fix — do not retry the same
+diagnosis.
+
 This is what closes the attribution lifecycle — error → branch → MR →
 **confirmed** resolution, not just "an MR was opened." Skipping this step
 means the registry's `auto-fixed` count and the 75%-remediation metric are

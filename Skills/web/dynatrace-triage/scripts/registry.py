@@ -33,7 +33,7 @@ FIXED_STATUSES = {"auto-fixed", "auto-fixed-mr-pending"}
 ELIGIBLE_STATUSES = FIXED_STATUSES | {"reported"}
 SKIP_STATUSES = {"skipped-3rd-party", "skipped-below-threshold"}
 ALL_STATUSES = ELIGIBLE_STATUSES | SKIP_STATUSES | {
-    "resolved-verified", "regressed-or-unmerged",
+    "resolved-verified", "regressed-or-unmerged", "reverted",
 }
 
 

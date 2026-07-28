@@ -79,15 +79,20 @@ When editing:
    (signature change, behavior change). If risky, note it explicitly in the
    MR body ("this utility is used by X, Y, Z — verify no regressions").
    Page-specific components usually don't need this.
-5. before adding tests, read the existing spec file in full — if a test
+5. **bundle impact check**: if the fix changes an import path or moves
+   something between lazy-loaded and eager module boundaries, compare
+   bundle size before/after (`pnpm build -- --stats` or the project's
+   equivalent). Flag any main-chunk increase >5KB in the MR body — a fix
+   that quietly bloats the bundle is its own regression.
+7. before adding tests, read the existing spec file in full — if a test
    already covers the failure path (even partially), update it rather than
    duplicating
-6. add or update focused tests for:
+8. add or update focused tests for:
    - reproduced failure path
    - normal success path
    - boundary/null/undefined path when relevant
    - regression-guard path where unintended behavior could silently change
-7. **verify build and typecheck before delivery** — lint and unit tests
+9. **verify build and typecheck before delivery** — lint and unit tests
    alone can miss a type error or build break outside the touched spec
    file; see the exact commands in Step 8 (`pnpm build`/`tsc --noEmit`
    alongside `pnpm eslint`/`pnpm test`). Do not proceed to Step 6's review
