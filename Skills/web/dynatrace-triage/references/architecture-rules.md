@@ -71,3 +71,17 @@ Same thresholds as above, but the consequence of low confidence changes:
 - optional chaining everywhere with no explanation
 - declaring success before establishing source confidence
 - fixing the symptom in the template when the contract is broken in the component or service
+
+## Security Constraints
+
+A fix must never introduce:
+- `innerHTML` / `outerHTML` / `document.write` with unsanitized dynamic or
+  user-controlled content
+- Angular's `bypassSecurityTrust*` without an explicit, stated justification
+- `eval()` / `new Function()` with dynamic input
+
+If a fix genuinely requires rendering user-controlled content, use
+framework-safe APIs (Angular template binding, `DomSanitizer`) — never raw
+string interpolation into the DOM. This applies even when the root cause
+diagnosis is otherwise correct; a security regression is worse than the
+original bug.

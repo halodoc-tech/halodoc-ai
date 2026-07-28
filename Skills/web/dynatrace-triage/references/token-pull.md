@@ -1,16 +1,18 @@
 # Live Pull — Token/DQL Path
 
 Acquires the eligible-error dataset via the Dynatrace Grail Storage Query API
-using `DT_API_TOKEN` (env var, token-type auto-detection, retry-on-429,
-polling — the standard pattern for any Grail-backed DQL client). This is one
-of the three acquisition paths chosen in Phase -1 of
+using `DT_API_TOKEN`, mirroring the pattern already used by the
+`performance-analysis-and-auto-fix` skill's `dt_trace_analyzer.py` for
+backend 5xx/4xx (env var, token-type auto-detection, retry-on-429, polling).
+This is one of the three acquisition paths chosen in Phase -1 of
 [auto-heal-workflow.md](./auto-heal-workflow.md) (the other two: `live-pull.md`
 browser, manual CSV).
 
-If your org already has backend error-triage tooling that queries Dynatrace's
-`spans` bucket for 5xx/4xx (a common pattern), that client is a good template
-for auth/retry/polling — but it queries the wrong bucket for browser/RUM
-exceptions, so it can't be reused directly for this path.
+**Security**: `DT_API_TOKEN` is sensitive — it grants read access to
+production error data, which may include PII in stack traces/URLs. Never
+include its value in logs, error messages, stderr output, or MR bodies. If
+authentication fails, report "Dynatrace API authentication failed — verify
+token scope `storage:query:read`", never echo the token itself.
 
 ## Contents
 
@@ -22,9 +24,9 @@ exceptions, so it can't be reused directly for this path.
 
 ## Why this needs a discovery step first
 
-There is usually no ready-made DQL schema for browser/RUM JavaScript
-exceptions lying around — most existing Dynatrace tooling targets backend
-traces (`spans`), not frontend errors. **Never guess field/bucket names.**
+`dt_trace_analyzer.py` only knows the backend `spans` bucket — it has no
+query for browser/RUM JavaScript exceptions, and no DQL schema for that data
+exists anywhere in this codebase today. **Never guess field/bucket names.**
 Confirm the real schema once, cheaply, before building the real query.
 
 ## Procedure
@@ -43,8 +45,8 @@ Linux/CI, set `DT_API_TOKEN` directly as an env var or CI secret; the
 If missing: report the blocker and offer to fall back to the browser path
 ([live-pull.md](./live-pull.md)) — do not prompt repeatedly.
 
-Required scope: `storage:query:read`. Validate with a cheap query before
-anything else:
+Required scope: `storage:query:read` (same as the reference bot). Validate
+with a cheap query before anything else:
 
 ```
 fetch events | limit 1 | fields event.kind
@@ -104,11 +106,15 @@ registry's dedupe logic behave identically regardless of acquisition path.
 
 ### 4. Cost discipline
 
-- `scanLimitGBytes` capped on every query (discovery: 1, real pull: 100).
+- `scanLimitGBytes` capped on every query (discovery: 1, real pull: 100 — same
+  cap the reference bot uses for trace queries).
 - `limit` on every query — never an unbounded fetch.
 - 7-day window only, never widened silently; if zero rows come back, report
-  that plainly rather than auto-retrying with a wider window.
-- Single retry on HTTP 429 using `Retry-After`.
+  that plainly rather than auto-retrying with a wider window (unlike the
+  reference bot's trace-lookup widening, which is a different, per-trace use
+  case).
+- Single retry on HTTP 429 using `Retry-After`, matching the reference
+  client's behavior.
 
 ### 5. Per-candidate detail evidence
 

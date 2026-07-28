@@ -2,7 +2,7 @@
 name: dynatrace-triage
 version: "1.0.0"
 maintainer: "halodoc-ai"
-description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors — trigger on "fix this Dynatrace error", "why is this Dynatrace crash happening", "investigate this production error", or a specific error id. Also supports a strategic summary mode — trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes", "remediation roadmap for these errors". Also supports an auto-healing batch pipeline — trigger with "auto-heal", "batch fix Dynatrace errors", or "heal" only when paired with "Dynatrace"/"auto-heal" explicitly (bare "heal" alone is ambiguous, especially in health-related products) — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, not native mobile crashes, not non-Dynatrace error sources.
+description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors — trigger on "fix this Dynatrace error", "why is this Dynatrace crash happening", "investigate this production error", or a specific error id. Also supports a strategic summary mode — trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes", "remediation roadmap for these errors". Also supports an auto-healing batch pipeline — trigger with "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", or "remediate Dynatrace errors in batch" (bare "heal" alone is deliberately NOT a trigger — too ambiguous, especially in health-related products) — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, not native mobile crashes, not non-Dynatrace error sources.
 compatibility: Claude Code only — requires direct repo filesystem access and bash tools
 ---
 
@@ -40,24 +40,26 @@ crashes, or errors from a monitoring source other than Dynatrace.
 
 Keep this file as the orchestrator. Load only the extra files you need.
 
-- For the end-to-end workflow: read [workflow.md](./references/workflow.md)
-- For fix selection and confidence scoring: read [architecture-rules.md](./references/architecture-rules.md)
-- For the canonical MR body format: read [mr-format.md](./references/mr-format.md)
-- For common Angular error patterns and source mapping hints: read [error-patterns.md](./references/error-patterns.md)
-- For module/page hints: read [module-map.md](./references/module-map.md)
-- For minified `<your-domain>/resources/*.js` frames that need deobfuscation: read [sourcemaps.md](./references/sourcemaps.md)
-- For the auto-heal batch pipeline (Mode 3): read [auto-heal-workflow.md](./references/auto-heal-workflow.md)
-- For auto-heal targeting rules (users threshold, hard 1st/3rd-party filter): read [eligibility.md](./references/eligibility.md)
-- For pulling errors live via an authenticated Chrome session: read [live-pull.md](./references/live-pull.md)
-- For pulling errors live via `DT_API_TOKEN`/DQL: read [token-pull.md](./references/token-pull.md)
-- For the pre-fix triage board and post-run fixed/not-fixed board: read [visualization.md](./references/visualization.md) — rendered as Claude Code HTML Artifacts (a scannable table, color-coded by planned action/outcome), redeployed to the same URL between the pre- and post-run render
-- For checking/enabling production sourcemaps in any web project: read [sourcemap-preflight.md](./references/sourcemap-preflight.md) — a read/write check: if sourcemaps are already enabled it's a no-op; if disabled, it applies the smallest config edit on its own dedicated branch/MR (never mixed into an error-fix branch, and never silently modifying the repo without a reviewable MR)
-- For the attribution registry schema and run report: read [registry-format.md](./references/registry-format.md)
-- For CSV parsing or reusable row extraction: use [parser.py](./scripts/parser.py)
-- For auto-heal work-queue filtering: use [eligibility.py](./scripts/eligibility.py)
-- For attribution registry init/update/report/verify: use [registry.py](./scripts/registry.py)
-- For quick script usage notes and error-handling conventions: read [README.md](./scripts/README.md) — scripts require Python 3 only (stdlib, no `pip install` needed)
-- For sample eval prompts and expected behavior baselines: inspect [evals.json](./evals/evals.json) and [sample_errors.csv](./evals/sample_errors.csv) only when validating the skill itself
+| Resource | Lines | When to load |
+|---|---|---|
+| [workflow.md](./references/workflow.md) | 163 | Mode 1/2 end-to-end flow |
+| [architecture-rules.md](./references/architecture-rules.md) | 87 | Fix selection and confidence scoring |
+| [mr-format.md](./references/mr-format.md) | 152 | The canonical MR body format |
+| [error-patterns.md](./references/error-patterns.md) | 239 | Common Angular error patterns and source mapping hints |
+| [module-map.md](./references/module-map.md) | 26 | Module/page routing hints |
+| [sourcemaps.md](./references/sourcemaps.md) | 106 | Deobfuscating minified `<your-domain>/resources/*.js` frames |
+| [auto-heal-workflow.md](./references/auto-heal-workflow.md) | 380 | Mode 3 batch pipeline (load early for any heal run) |
+| [eligibility.md](./references/eligibility.md) | 120 | Auto-heal targeting rules (users threshold, hard 1st/3rd-party filter) |
+| [live-pull.md](./references/live-pull.md) | 123 | Pulling errors live via an authenticated Chrome session |
+| [token-pull.md](./references/token-pull.md) | 135 | Pulling errors live via `DT_API_TOKEN`/DQL |
+| [visualization.md](./references/visualization.md) | 89 | The pre-fix triage board and post-run fixed/not-fixed board — rendered as Claude Code HTML Artifacts, redeployed to the same URL between the pre- and post-run render |
+| [sourcemap-preflight.md](./references/sourcemap-preflight.md) | 53 | Checking/enabling production sourcemaps — a read/write check: no-op if already enabled, else its own dedicated branch/MR (never mixed into an error-fix branch) |
+| [registry-format.md](./references/registry-format.md) | 104 | The attribution registry schema and run report |
+| [parser.py](./scripts/parser.py) | — | CSV parsing or reusable row extraction |
+| [eligibility.py](./scripts/eligibility.py) | — | Auto-heal work-queue filtering |
+| [registry.py](./scripts/registry.py) | — | Attribution registry init/update/report/verify |
+| [scripts/README.md](./scripts/README.md) | 77 | Script usage and error-handling conventions — Python 3 stdlib only, no `pip install` needed |
+| [evals.json](./evals/evals.json) / [sample_errors.csv](./evals/sample_errors.csv) | — | Sample eval prompts and expected behavior — only when validating the skill itself |
 
 ## Operating Rules
 
@@ -72,6 +74,40 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - In heal mode, every auto-fixed error must produce exactly one MR from a branch provably cut from latest `origin/master`, and every non-fixed eligible error must appear in the run report with a triage writeup. Never widen the confidence gate to reach the remediation-rate target.
 - In heal mode, 1st-party is a HARD filter applied before anything else — 3rd-party errors (ad/analytics scripts, browser extensions, opaque cross-origin) never enter the fix queue on a "suspected" basis, but they are still shown (excluded, with reason) on the pre-fix visualization for auditability.
 - In heal mode, never touch Dynatrace before Phase -1's data-source choice (token vs. browser vs. CSV) is resolved — ask if not specified.
+- Re-run safety: the registry prevents duplicate MRs — if an error already has an open MR from a prior run, it is skipped rather than re-fixed (see [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B's re-run dedupe).
+- Never echo `DT_API_TOKEN` values in logs, error messages, or MR bodies — if a token-related operation fails, report "token rejected" / "authentication failed", never the token itself.
+
+## Portability Note
+
+This skill requires Claude Code (desktop/CLI) — it needs direct filesystem
+access, bash tools, and to run the bundled Python scripts. It will NOT work
+in the Claude.ai web UI or in IDE extensions with restricted script
+execution.
+
+**Workaround for IDE/restricted-environment users**: clone the skill's
+scripts and run them manually outside the restricted environment, then
+bring the results into a Claude Code session for the fixing phase:
+
+```bash
+cd /path/to/your/frontend-repo
+python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv --first-party-domain <your-domain> --min-users 100 --out queue.json
+# then invoke this skill in Claude Code, pointing it at queue.json, for diagnosis/fix/MR
+```
+
+This gives restricted-environment users the eligibility-filtering and
+registry tooling even when full auto-fix orchestration requires Claude Code.
+
+## Confidence Scoring (Summary)
+
+| Confidence | Source | Fix |
+|---|---|---|
+| **High** | ≥2 aligned signals (function name, module, error property match) | Restores the correct invariant, focused change, test covers the failure path |
+| **Medium** | 1 strong signal + supporting context | Defensive fix with explicit assumptions documented in the MR body |
+| **Low** | Ambiguous signals, multiple candidates | Report-only — no auto-fix |
+
+**Auto-fix gate (Mode 3)**: high source + high fix, OR medium source +
+medium fix with assumptions. Low confidence on either axis → report-only,
+never a guess. Full rubric and fix-hierarchy: [architecture-rules.md](./references/architecture-rules.md).
 
 ## Modes
 
@@ -146,3 +182,9 @@ Additionally, in heal mode (Mode 3), a run is only complete when:
 - every auto-fixed error has an MR URL (or a recorded `glab mr create` blocker) — MR coverage must be 100%
 - every eligible-but-unfixed error has a triage writeup in the registry
 - the registry is finalized and the CSV row count reconciles across auto-fixed / reported / skipped tables
+
+Post-merge verification is recommended, not optional in spirit: an
+`auto-fixed` status is a claim (tests + build passed) until confirmed —
+query Dynatrace again ~15-60 minutes after the MRs deploy, and again across
+the following 7 days, to confirm affected-user counts actually dropped. See
+[auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4.

@@ -24,7 +24,7 @@ Read before acting: [live-pull.md](./live-pull.md), [token-pull.md](./token-pull
 - [Visualize](#visualize-between-2a-and-2b)
 - [Phase 2B: Execute planned actions](#phase-2b-execute-planned-actions)
 - [Phase 3: Finalize](#phase-3-finalize)
-- [Phase 4: Resolution verification](#phase-4-resolution-verification-later-runs)
+- [Phase 4: Resolution verification](#phase-4-resolution-verification-post-deploy)
 
 Set once per run:
 
@@ -142,6 +142,23 @@ visualization step — do not update the registry to a terminal status yet
 (Phase 2B does that once the action actually executes, so the registry
 reflects reality, not intent).
 
+### 4. Cross-error deduplication (optional, after all errors are diagnosed)
+
+Once every error in the batch has a diagnosis, check for shared root causes
+before moving to Phase 2B:
+
+- group errors by file + function + root-cause summary
+- if ≥2 errors share the same root-cause location and fix: plan ONE fix that
+  addresses both, point both registry entries at the same branch/MR (see
+  [eligibility.md](./eligibility.md)'s `duplicate_group`), and list every
+  resolved error ID in that one MR body
+
+This reduces MR count and reviewer load. Treat it as optional and
+conservative — a false merge (grouping two errors that don't actually share
+a fix) is worse than two duplicate MRs, so only group when the shared
+root-cause location and the fix itself are genuinely identical, not just
+similar.
+
 ## Visualize (between 2A and 2B)
 
 Render the pre-fix triage board per [visualization.md](./visualization.md):
@@ -200,7 +217,9 @@ updating the registry.
 
 Then apply the smallest correct fix per [workflow.md](./workflow.md) Step 5
 and [error-patterns.md](./error-patterns.md), using the diagnosis already
-produced in Phase 2A (do not re-diagnose from scratch).
+produced in Phase 2A (do not re-diagnose from scratch). **Every fix must pass
+the build/typecheck gate in step 5 below before any MR is opened** — lint
+and unit tests alone can miss a build break.
 
 #### 4. Detect the project's test/lint/build commands
 
@@ -325,17 +344,37 @@ chunks) against the pre-run baseline. If total bundle size grew >5% or any
 chunk grew >10%, note it in the report and flag the fixed files for a
 follow-up audit — a batch of individually-small fixes can add up.
 
-## Phase 4: Resolution verification (later runs)
+## Phase 4: Resolution verification (post-deploy)
 
-When a heal run happens against a fresh pull:
+**Recommended, not just incidental**: don't wait for the next unrelated heal
+run to find out whether a fix actually worked. An `auto-fixed` status is a
+claim (tests + build passed) until this step confirms the production error
+count actually dropped — run it proactively:
 
-```bash
-python3 scripts/registry.py verify <registry> --run-id <new_run_id> --fresh-source <fresh-source>
-```
+1. **Wait for deployment.** Timing depends on your deploy pipeline —
+   typically 15-60 minutes for a frontend release. Check the merged MR's
+   pipeline/deploy status rather than guessing.
+2. **Re-pull Dynatrace** for the same window (7 days) via whichever
+   acquisition path was used originally (browser/token/CSV).
+3. **Run verify**:
+   ```bash
+   python3 scripts/registry.py verify <registry> --run-id <new_run_id> --fresh-source <fresh-source>
+   ```
+   - prior `auto-fixed*` entry absent from the fresh pull, or its affected-user
+     count dropped to near-zero (allow <5% of the original — likely stale
+     cached sessions) → `resolved-verified`
+   - still present at a similar volume → `regressed-or-unmerged` (check
+     `glab mr view <url>`/`gh pr view <url>` to tell which: an unmerged
+     MR/PR means the fix hasn't shipped yet — not a regression; a merged MR
+     with the error still occurring at volume means the root cause was
+     likely misdiagnosed)
+4. **Triage `regressed-or-unmerged` entries with a merged MR** as
+   high-priority — treat as a fresh, high-confidence-suspect candidate in
+   the next heal run rather than assuming the original fix simply needs
+   more time.
 
-- prior `auto-fixed*` entry absent from the fresh pull → `resolved-verified`
-- still present → `regressed-or-unmerged` (check `glab mr view <url>` to tell
-  which: unmerged MR means the fix hasn't shipped — not a regression)
-
-This closes the attribution lifecycle: error → branch → MR → verified
-resolution.
+This is what closes the attribution lifecycle — error → branch → MR →
+**confirmed** resolution, not just "an MR was opened." Skipping this step
+means the registry's `auto-fixed` count and the 75%-remediation metric are
+a claim about effort, not a confirmed outcome. It's acceptable to batch this
+weekly across a run's fixes rather than per-fix, but it should happen.

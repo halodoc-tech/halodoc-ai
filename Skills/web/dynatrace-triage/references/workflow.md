@@ -73,14 +73,25 @@ When editing:
 1. read the whole target file
 2. read the spec file and sibling implementation if needed
 3. apply the smallest change that fixes the root cause
-4. before adding tests, read the existing spec file in full — if a test
+4. **blast radius check**: if the change touches a shared utility, service,
+   or component used by multiple pages/modules — `git grep "import.*<name>"`
+   to find every caller, and check whether the change could affect them
+   (signature change, behavior change). If risky, note it explicitly in the
+   MR body ("this utility is used by X, Y, Z — verify no regressions").
+   Page-specific components usually don't need this.
+5. before adding tests, read the existing spec file in full — if a test
    already covers the failure path (even partially), update it rather than
    duplicating
-5. add or update focused tests for:
+6. add or update focused tests for:
    - reproduced failure path
    - normal success path
    - boundary/null/undefined path when relevant
    - regression-guard path where unintended behavior could silently change
+7. **verify build and typecheck before delivery** — lint and unit tests
+   alone can miss a type error or build break outside the touched spec
+   file; see the exact commands in Step 8 (`pnpm build`/`tsc --noEmit`
+   alongside `pnpm eslint`/`pnpm test`). Do not proceed to Step 6's review
+   summary until the build is clean.
 
 ### Step 6: Architect review summary before delivery
 
