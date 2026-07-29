@@ -1,5 +1,15 @@
 # Sourcemaps
 
+## Contents
+- [When to use sourcemaps](#when-to-use-sourcemaps)
+- [Where your sourcemaps live](#where-your-sourcemaps-live)
+- [Expected deobfuscation workflow](#expected-deobfuscation-workflow)
+- [Example S3 fetch sketch](#example-s3-fetch-sketch)
+- [Example Node resolution sketch](#example-node-resolution-sketch)
+- [Access expectation](#access-expectation)
+- [Practical rule](#practical-rule)
+- [Source confidence explanation](#source-confidence-explanation)
+
 Use this reference when Dynatrace stack traces point to minified production bundles such as:
 
 - `https://<your-domain>/resources/chunk-*.js`

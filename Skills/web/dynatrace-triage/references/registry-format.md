@@ -1,5 +1,13 @@
 # Registry Format (Lifecycle Fix Attribution)
 
+## Contents
+- [Location](#location)
+- [Managed by scripts/registry.py](#managed-by-scriptsregistrypy)
+- [Schema](#schema)
+- [Status lifecycle](#status-lifecycle)
+- [Metrics definitions](#metrics-definitions)
+- [Run report structure](#run-report-structure-rendered-by-registrypy-report)
+
 The attribution registry is the persistent record of the full fix lifecycle:
 error → eligibility decision → branch → MR → verified resolution. It is what
 proves the OKR metrics (≥75% remediation rate, 100% MR coverage).

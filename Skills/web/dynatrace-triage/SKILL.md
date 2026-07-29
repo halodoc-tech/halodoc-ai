@@ -81,7 +81,7 @@ Keep this file as the orchestrator. Load only the extra files you need.
 | [scripts/README.md](./scripts/README.md) | 77 | Script usage and error-handling conventions — Python 3 stdlib only, no `pip install` needed |
 | [evals.json](./evals/evals.json) / [sample_errors.csv](./evals/sample_errors.csv) | — | Sample eval prompts and expected behavior — only when validating the skill itself |
 
-**Note:** files >100 lines include a `## Contents` section at the top for partial-read navigation.
+**Note:** every reference file ≥100 lines includes a `## Contents` section at the top for partial-read navigation (applied consistently at the 100-line boundary, e.g. `registry-format.md` at 104 lines). Scripts (`.py`) are excluded from this rule and from the line-count column (`—`) — their size isn't a stable/meaningful metric and they're read via `grep`/targeted sections, not top-to-bottom.
 
 ## Operating Rules
 
@@ -91,7 +91,7 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - Never claim the root cause is fixed unless the contract/lifecycle/state issue is addressed.
 - Never edit vendor files, `dist/`, `node_modules/`, or generated output.
 - Auto-apply, commit, push, and open an MR only when source confidence is not low and fix confidence is high or medium with explicit assumptions.
-- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes once the fixing phase begins; the only allowed stop is a dirty git tree. **Sequencing exception for IDE/restricted users**: the Portability Note workaround has users manually run eligibility filtering and PREVIEW the work queue before starting the fixing phase inside Claude Code — that preview is a deliberate planning step required by the environment's restrictions, not a contradiction of "no approval during fixing" (which describes the fixing phase's behavior once started, whether reached via full auto-orchestration or the manual-preview workaround).
+- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes **once the fixing phase (Phase 2B) begins**; the only allowed stop is a dirty git tree. The pre-fix visualization (Phase 2A's "Visualize" step) is the human's one review opportunity, before execution — after that, confidence scores alone decide whether a fix auto-merges, with no per-fix prompts. Use `--dry-run` to stop after the visualization without executing anything. **Sequencing exception for IDE/restricted users**: the Portability Note workaround has users manually run eligibility filtering and PREVIEW the work queue before starting the fixing phase inside Claude Code — that preview is a deliberate planning step required by the environment's restrictions, not a contradiction of "no approval during fixing" (which describes the fixing phase's behavior once started, whether reached via full auto-orchestration or the manual-preview workaround).
 - In heal mode, one error's failure never aborts the batch: record it in the registry, reset to clean master, continue.
 - In heal mode, every auto-fixed error must produce exactly one MR from a branch provably cut from latest `origin/master`, and every non-fixed eligible error must appear in the run report with a triage writeup. Never widen the confidence gate to reach the remediation-rate target.
 
@@ -130,16 +130,24 @@ cd /path/to/your/frontend-repo
 python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 
-# Windows (PowerShell/Git Bash/WSL — all accept forward slashes):
+# Windows — PowerShell (uses backtick ` for line continuation, shown below):
 cd /c/path/to/your/frontend-repo
 python3 /c/path/to/dynatrace-triage/scripts/eligibility.py errors.csv `
+  --first-party-domain <your-domain> --min-users 100 --out queue.json
+
+# Windows — Git Bash/WSL (uses backslash \ for line continuation, like Linux/macOS):
+cd /c/path/to/your/frontend-repo
+python3 /c/path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 ```
 
 **Path portability note:** every path in this skill uses forward slashes
 (`/`), which work on Linux, macOS, WSL, Git Bash, and PowerShell. This
 skill requires Claude Code (which runs bash), so native `cmd.exe` isn't a
-supported shell here — use PowerShell, Git Bash, or WSL on Windows.
+supported shell here — use PowerShell, Git Bash, or WSL on Windows. The
+backtick (`` ` ``) in the PowerShell example above is that shell's line-continuation
+syntax, not part of the path — Git Bash/WSL use a trailing backslash (`\`)
+instead, as shown.
 
 Then invoke this skill in Claude Code, pointing it at `queue.json`, for the
 diagnosis/fix/MR phase.
@@ -169,15 +177,18 @@ When using `--csv <path>` (or a Dynatrace Error Inspector export), the file must
 
 ## Confidence Scoring (Summary)
 
-| Confidence | Source | Fix |
+The full rubric — the only canonical definition — lives in [architecture-rules.md](./references/architecture-rules.md)'s Confidence Model. This table is a pointer, not a duplicate, to avoid the two drifting apart:
+
+| Confidence | Source (one-line) | Fix (one-line) |
 |---|---|---|
-| **High** | ≥2 aligned signals (function name, module, error property match) | Restores the correct invariant, focused change, test covers the failure path |
-| **Medium** | 1 strong signal + supporting context | Defensive fix with explicit assumptions documented in the MR body |
-| **Low** | Ambiguous signals, multiple candidates | Report-only — no auto-fix |
+| **High** | ≥2 independent signals point to the same file/component | Root cause is coherent, minimal fix is clear, tests can cover it |
+| **Medium** | 1 strong signal, mapping incomplete | Plausible but architectural cause is partly inferred |
+| **Low** | Vague/indirect clues, vendor/minified stack dominates | Speculative or merely suppressive |
 
 **Auto-fix gate (Mode 3)**: high source + high fix, OR medium source +
-medium fix with assumptions. Low confidence on either axis → report-only,
-never a guess. Full rubric and fix-hierarchy: [architecture-rules.md](./references/architecture-rules.md).
+medium fix with explicit assumptions written into the MR and registry. Low
+confidence on either axis → report-only, never a guess. Full rubric and
+fix-hierarchy: [architecture-rules.md](./references/architecture-rules.md).
 
 If this summary ever conflicts with the full rubric in [architecture-rules.md](./references/architecture-rules.md), **the full rubric takes precedence** — this table is a quick reference, not the canonical definition.
 
@@ -226,7 +237,7 @@ Then:
 
 ### Mode 3: Auto-Heal Batch
 
-Trigger phrases: "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", "remediate Dynatrace errors in batch" (bare "heal" alone is deliberately NOT a trigger — too ambiguous, especially in health-related products).
+Trigger phrases: "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", "remediate Dynatrace errors in batch" ("heal" with **no other context** — i.e. the single word alone — is deliberately NOT a trigger, too ambiguous in health-related products; but "heal these errors", "heal the Dynatrace issues", or "heal the cart page crashes" all carry enough context to trigger Mode 3 like the phrases above).
 
 **Mode disambiguation:** a phrase like "fix all errors" could plausibly mean Mode 1 (a single error literally named "all") or Mode 3 (batch). Check for Mode 3 keywords first (above); if none are present AND no `--csv`/`--source` flag or batch-scale context (multiple error IDs, a CSV path) is given, ask: "Do you mean fixing a single error, or batch-fixing all errors via auto-heal?" — Mode 3 is the higher-stakes, no-approval operation, so confirm before proceeding on an ambiguous phrase.
 
@@ -292,6 +303,14 @@ or increase, reopen the error for deeper investigation — the fix may have
 been a symptom patch, not a root-cause resolution. See
 [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4 for the
 full verification protocol.
+
+**This verification is intentionally manual**, not a missing automation.
+Trend interpretation (stable vs. dropping vs. spiking affected-user counts)
+requires human judgment that a script would either get wrong or need to be
+as conservative as a human anyway; automating the Dynatrace queries would
+also add credential/retry complexity for a step that already has a clear,
+low-effort manual protocol. Set a calendar reminder for the 15-60 min and
+7-day checks against the error IDs in the run report.
 
 ## Rollback Procedure
 

@@ -1,5 +1,14 @@
 # Eligibility (Auto-Heal Targeting)
 
+## Contents
+- [Scope assumptions](#scope-assumptions)
+- [1st-party filter — HARD exclusion, not a soft flag](#1st-party-filter--hard-exclusion-not-a-soft-flag)
+- [Users threshold](#users-threshold)
+- [Canonical row schema](#canonical-row-schema)
+- [Status taxonomy](#status-taxonomy)
+- [Duplicates / shared root cause](#duplicates--shared-root-cause)
+- [Ordering](#ordering)
+
 Rules that scope Mode 3 (auto-heal) to 1st-party EXCEPTION errors impacting
 ≥100 users within a rolling 7-day window.
 
