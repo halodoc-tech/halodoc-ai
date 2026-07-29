@@ -2,7 +2,7 @@
 name: dynatrace-triage
 version: "1.0.0"
 maintainer: "halodoc-ai"
-description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, stronger regression thinking, evidence-based confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors — trigger on "fix this Dynatrace error", "why is this Dynatrace crash happening", "investigate this production error", or a specific error id. Also supports a strategic summary mode — trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes", "remediation roadmap for these errors". Also supports an auto-healing batch pipeline — trigger with "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", or "remediate Dynatrace errors in batch" (bare "heal" alone is deliberately NOT a trigger — too ambiguous, especially in health-related products) — that pulls errors live from Dynatrace (Chrome browser session or API token — asks which) or from a CSV export, hard-filters to 1st-party exceptions (>=100 users, rolling 7-day window), shows a readable pre-fix plan before touching any code, fixes with no approval prompt, opens one Git MR per fixed error, and tracks the full fix lifecycle in an attribution registry. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, not native mobile crashes, not non-Dynatrace error sources.
+description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors. Operates in three modes — (1) single-error fix: trigger on "fix this Dynatrace error", "investigate this production error", or a specific error id; (2) strategic summary: trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes"; (3) auto-healing batch pipeline: trigger with "auto-heal", "batch fix Dynatrace errors", "remediate Dynatrace errors in batch" — pulls errors from Dynatrace (API/browser/CSV), hard-filters to 1st-party exceptions (>=100 users, 7-day window), shows a pre-fix plan, auto-fixes high-confidence errors with no approval prompt, opens one Git MR per error. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, mobile crashes, or non-Dynatrace sources.
 compatibility: Claude Code only — requires direct repo filesystem access and bash tools
 ---
 
@@ -89,6 +89,9 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - In heal mode, never touch Dynatrace before Phase -1's data-source choice (token vs. browser vs. CSV) is resolved — ask if not specified.
 - Re-run safety: the registry prevents duplicate MRs — if an error already has an open MR from a prior run, it is skipped rather than re-fixed (see [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B's re-run dedupe).
 - Never echo `DT_API_TOKEN` values in logs, error messages, or MR bodies — if a token-related operation fails, report "token rejected" / "authentication failed", never the token itself.
+- Never use `innerHTML`, `outerHTML`, `dangerouslySetInnerHTML`, `bypassSecurityTrustHtml`, or `eval()`/`new Function()` in a fix — use safe alternatives (`textContent`, `DomSanitizer`, framework-native rendering) or explicitly document why the risk is unavoidable. Full detail: [architecture-rules.md](./references/architecture-rules.md)'s Security Constraints.
+- If the target repo uses SSR (Angular Universal, Next.js, etc.), ensure fixes avoid browser-only APIs (`window`, `document`, `localStorage`) in SSR-executed code paths — guard with `isPlatformBrowser`/`typeof window !== 'undefined'` or a client-only lifecycle hook.
+- Prefer fixing the root invariant over adding a heavy defensive dependency — a null guard is fine; importing a utility library for one helper call is not. If a fix genuinely needs a new dependency, justify the bundle-size impact in the MR body.
 
 ## Portability Note
 
@@ -107,9 +110,9 @@ cd /path/to/your/frontend-repo
 python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 
-# Windows (PowerShell):
-cd C:\path\to\your\frontend-repo
-python3 C:\path\to\dynatrace-triage\scripts\eligibility.py errors.csv `
+# Windows (PowerShell — forward slashes work fine and stay portable if this ever runs in CI):
+cd C:/path/to/your/frontend-repo
+python3 C:/path/to/dynatrace-triage/scripts/eligibility.py errors.csv `
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 ```
 
@@ -176,6 +179,8 @@ Then:
 
 ### Mode 3: Auto-Heal Batch
 
+Trigger phrases: "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", "remediate Dynatrace errors in batch" (bare "heal" alone is deliberately NOT a trigger — too ambiguous, especially in health-related products).
+
 Command pattern: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
 **CI users:** set `REGISTRY_PATH=/workspace/registry.json` (or any
@@ -229,8 +234,12 @@ Additionally, in heal mode (Mode 3), a run is only complete when:
 - every eligible-but-unfixed error has a triage writeup in the registry
 - the registry is finalized and the CSV row count reconciles across auto-fixed / reported / skipped tables
 
-Post-merge verification is recommended, not optional in spirit: an
-`auto-fixed` status is a claim (tests + build passed) until confirmed —
-query Dynatrace again ~15-60 minutes after the MRs deploy, and again across
-the following 7 days, to confirm affected-user counts actually dropped. See
-[auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4.
+**Post-merge verification is required to confirm impact reduction** — an
+`auto-fixed` status is a claim (tests + build passed locally) until
+confirmed in production, not a completed outcome. Query Dynatrace again
+~15-60 minutes after the MRs deploy, and again across the following 7 days,
+to confirm affected-user counts actually dropped. If counts remain stable
+or increase, reopen the error for deeper investigation — the fix may have
+been a symptom patch, not a root-cause resolution. See
+[auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4 for the
+full verification protocol.
