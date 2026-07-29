@@ -91,7 +91,7 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - Never claim the root cause is fixed unless the contract/lifecycle/state issue is addressed.
 - Never edit vendor files, `dist/`, `node_modules/`, or generated output.
 - Auto-apply, commit, push, and open an MR only when source confidence is not low and fix confidence is high or medium with explicit assumptions.
-- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes **once the fixing phase (Phase 2B) begins**; the only allowed stop is a dirty git tree. The pre-fix visualization (Phase 2A's "Visualize" step) is the human's one review opportunity, before execution — after that, confidence scores alone decide whether a fix auto-merges, with no per-fix prompts. Use `--dry-run` to stop after the visualization without executing anything. **Sequencing exception for IDE/restricted users**: the Portability Note workaround has users manually run eligibility filtering and PREVIEW the work queue before starting the fixing phase inside Claude Code — that preview is a deliberate planning step required by the environment's restrictions, not a contradiction of "no approval during fixing" (which describes the fixing phase's behavior once started, whether reached via full auto-orchestration or the manual-preview workaround).
+- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes **once the fixing phase (Phase 2B) begins**; the only allowed stop is a dirty git tree. The pre-fix visualization (Phase 2A's "Visualize" step) does not wait for a human "go ahead" either — it's Claude's own sanity-check pass over the board before proceeding straight to Phase 2B; the human watching the session retains ambient ability to interrupt, but the workflow itself never blocks on a confirmation prompt at any point except `--dry-run`, which stops after the visualization deliberately. After Phase 2B begins, confidence scores alone decide whether a fix auto-merges, with no per-fix prompts. **Sequencing exception for IDE/restricted users**: the Portability Note workaround has users manually run eligibility filtering and PREVIEW the work queue before starting the fixing phase inside Claude Code — that preview is a deliberate planning step required by the environment's restrictions, not a contradiction of "no approval during fixing" (which describes the fixing phase's behavior once started, whether reached via full auto-orchestration or the manual-preview workaround).
 - In heal mode, one error's failure never aborts the batch: record it in the registry, reset to clean master, continue.
 - In heal mode, every auto-fixed error must produce exactly one MR from a branch provably cut from latest `origin/master`, and every non-fixed eligible error must appear in the run report with a triage writeup. Never widen the confidence gate to reach the remediation-rate target.
 
@@ -112,6 +112,7 @@ If your team's SLA requires human review for ALL prod changes, use `--dry-run` t
 - Never use `innerHTML`, `outerHTML`, `dangerouslySetInnerHTML`, `bypassSecurityTrustHtml`, or `eval()`/`new Function()` in a fix — use safe alternatives (`textContent`, `DomSanitizer`, framework-native rendering) or explicitly document why the risk is unavoidable. Full detail: [architecture-rules.md](./references/architecture-rules.md)'s Security Constraints.
 - If the target repo uses SSR (Angular Universal, Next.js, etc.), ensure fixes avoid browser-only APIs (`window`, `document`, `localStorage`) in SSR-executed code paths — guard with `isPlatformBrowser`/`typeof window !== 'undefined'` or a client-only lifecycle hook.
 - Prefer fixing the root invariant over adding a heavy defensive dependency — a null guard is fine; importing a utility library for one helper call is not. If a fix genuinely needs a new dependency, justify the bundle-size impact in the MR body.
+- Most root-cause fixes are logic-only (restoring an invariant, guarding a lifecycle race) and touch no UI. On the rarer fix that does add or modify UI (an error boundary's fallback content, a loading state): use the project's existing design system/component library over ad-hoc HTML/CSS; keep it accessible (semantic elements, ARIA labels where needed, working keyboard navigation, focus management for any modal/dialog); and route any new user-facing text through the project's i18n system rather than hardcoding a string.
 
 ## Portability Note
 
@@ -120,9 +121,14 @@ access, bash tools, and to run the bundled Python scripts. It will NOT work
 in the Claude.ai web UI or in IDE extensions with restricted script
 execution.
 
-**Workaround for IDE/restricted-environment users**: clone the skill's
-scripts and run them manually outside the restricted environment, then
-bring the results into a Claude Code session for the fixing phase:
+**Workaround for IDE/restricted-environment users**: this workaround needs
+**two separate environments** — only the eligibility-filtering step runs
+outside Claude Code; the diagnosis/fix/MR phase still requires a real
+Claude Code session (desktop app or CLI), not the restricted IDE extension.
+Clone the skill's scripts and run them manually in any shell with Python 3
+(your local machine, WSL, a CI runner — the restricted IDE's own terminal
+works fine for this part), then bring the resulting `queue.json` into a
+separate Claude Code session for the fixing phase:
 
 ```bash
 # Linux/macOS:
@@ -263,13 +269,47 @@ Then:
    when fresher-than-latest-export data is genuinely needed. If a CSV path
    is given → use it directly; else read `--source`, or ask (token vs.
    browser) if neither is specified — BEFORE touching Dynatrace.
-2. Run Phase 0 preconditions (clean tree, latest master, sourcemap preflight, registry init).
-3. Pull errors via the chosen path (7-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row.
+2. Run Phase 0 preconditions: verify Python 3 is available (`python3 --version`; if not found, tell the user "Python 3 is required but not installed — install it or run in an environment where it's available" and stop), clean tree, latest master, sourcemap preflight, registry init.
+3. Pull errors via the chosen path (7-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row. **If the queue is empty after filtering** (every row was 3rd-party or below the users threshold), print "No eligible errors found — 0 errors passed the 1st-party filter and min-users threshold. Nothing to fix." and exit cleanly — do not create registry entries beyond the `init` record, do not render the visualization, and do not proceed to Phase 2A/2B.
 4. **Phase 2A**: diagnose every eligible error (evidence, confidence, planned action) with no side effects yet.
-5. **Visualize**: render the pre-fix triage board (Artifact) showing every candidate's plan, plus excluded/skipped rows for audit. **This is your last chance to review the plan before execution** — inspect the board, sanity-check the confidence scores and planned actions, then proceed to Phase 2B. Use `--dry-run` to stop here without executing anything.
+5. **Visualize**: render the pre-fix triage board (Artifact) showing every candidate's plan, plus excluded/skipped rows for audit. **"Last chance to review" means Claude's own sanity-check pass, not a wait-for-human-confirmation step** — inspect the board, sanity-check the confidence scores and planned actions against the evidence gathered in Phase 2A, then proceed directly to Phase 2B without pausing for a human "go ahead." (Because this runs inside an interactive Claude Code session, the human watching can still interrupt at any point — that's ambient oversight, not a formal gate the workflow waits on.) Use `--dry-run` to stop here without executing anything — that is the only flag that halts the pipeline at this point.
 6. **Phase 2B**: execute the planned actions — confidence gate replaces the human approval prompt; low confidence → report-only; high/medium-with-assumptions → branch/fix/test/MR.
 7. Finalize: `scripts/registry.py finalize` + `report`, redeploy the visualization as the post-run board, print the run report with the 75%-target verdict (a heuristic — high-confidence fixes should resolve roughly 3/4 of eligible-user-volume; adjust to your team's SLA if 75% isn't the right bar).
 8. Never ask for approval unless the git tree is dirty; `glab` missing is a recorded blocker, not a stop.
+
+## Worked Example — Mode 3 Auto-Heal
+
+**Scenario:** 3 rows in the CSV export (7-day window), `--first-party-domain <your-domain> --min-users 100`.
+
+**Input CSV (relevant columns):**
+
+| `error.id` | `❌ Error` | `👥 Users` | Top stack frame |
+|---|---|---|---|
+| ERR-A1 | Cannot read properties of undefined (reading 'push') | 250 | `<your-domain>/resources/chunk-cart.js:5:234` (`navigateToCart`) |
+| ERR-D4 | TypeError: Cannot read 'length' | 80 | `<your-domain>/resources/chunk-search.js:12:100` |
+| ERR-G7 | Script error. | 300 | `some-ad-network.example/tracker.js:1:1` |
+
+**Eligibility filter (`scripts/eligibility.py --first-party-domain <your-domain> --min-users 100`):**
+- ERR-A1: 1st-party, 250 ≥ 100 users → **eligible**
+- ERR-D4: 80 < 100 users → **excluded** (`skipped-below-threshold`)
+- ERR-G7: 3rd-party domain → **excluded** (`skipped-3rd-party`, hard filter)
+
+**Work queue:** 1 error (ERR-A1).
+
+**Phase 2A diagnosis:**
+- Source confidence **high** — 2 aligned signals: function name `navigateToCart` + page routing to `/cart`.
+- Fix confidence **high** — root cause is a router not re-initialized in the cart page's lifecycle; fix restores the init call; a test reproduces the crash.
+- Planned action: **auto-fix**.
+
+**Phase 2B execution:**
+- Branch `fix/error-ERR-A1-cart-router`, cut from latest `origin/master`.
+- Commit restores the router init in the cart page lifecycle hook, adds a focused regression test.
+- MR opened: "Fix ERR-A1: cart page router undefined on re-entry".
+- `registry.py update --status auto-fixed --mr-url <url> --branch fix/error-ERR-A1-cart-router ...`
+
+**Run report:** Auto-fixed 1/1 eligible (250/250 users = 100% remediation, exceeds the 75% target); 2 excluded (3rd-party, below threshold) listed with reasons; MR coverage 100%.
+
+**Post-merge verification (15-60 min):** query `error.id = "ERR-A1"` in Error Inspector → `👥 Users` trending to 0 → fix confirmed, no rollback needed.
 
 ## Delivery Expectations
 
@@ -303,6 +343,10 @@ or increase, reopen the error for deeper investigation — the fix may have
 been a symptom patch, not a root-cause resolution. See
 [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4 for the
 full verification protocol.
+
+**How to verify (manual protocol):**
+1. **15-60 min after deploy:** In Dynatrace Error Inspector → Explorer, filter to the error IDs from this run's report (the `error.id` values in the Auto-Fixed table). Check the `👥 Users` column for each — counts should be dropping toward zero. If any is stable or increasing, treat it as a rollback candidate (see Rollback Procedure below).
+2. **7 days after deploy:** Repeat the same filtered query with a 7-day window. Confirm the downward trend held. If not, `registry.py update --run-id <run> --error-id <id> --status reopened --note "<what the 7-day query showed>"`.
 
 **This verification is intentionally manual**, not a missing automation.
 Trend interpretation (stable vs. dropping vs. spiking affected-user counts)
