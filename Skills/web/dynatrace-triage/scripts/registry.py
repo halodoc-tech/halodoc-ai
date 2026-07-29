@@ -33,7 +33,8 @@ FIXED_STATUSES = {"auto-fixed", "auto-fixed-mr-pending"}
 ELIGIBLE_STATUSES = FIXED_STATUSES | {"reported"}
 SKIP_STATUSES = {"skipped-3rd-party", "skipped-below-threshold"}
 ALL_STATUSES = ELIGIBLE_STATUSES | SKIP_STATUSES | {
-    "resolved-verified", "regressed-or-unmerged", "reverted",
+    "resolved-verified", "regressed-or-unmerged", "reverted", "reopened",
+    "deferred-conflict",
 }
 
 
@@ -125,6 +126,7 @@ def cmd_update(args):
         "branch": None, "branch_point_sha": None, "mr_url": None,
         "source_confidence": None, "fix_confidence": None,
         "duplicate_group": None, "triage_writeup": None,
+        "locked_files": [],
         "runs": [], "updated_at": None, "verified_at": None,
     })
     entry["status"] = args.status
@@ -139,11 +141,39 @@ def cmd_update(args):
     ]:
         if value is not None:
             entry[field] = value
+    if args.files:
+        entry["locked_files"] = sorted(set(entry.get("locked_files") or []) | set(args.files.split(",")))
     if args.run_id not in entry["runs"]:
         entry["runs"].append(args.run_id)
     entry["updated_at"] = now()
     save(args.registry, data)
     print(f"{args.error_id}: {args.status}")
+    return 0
+
+
+def cmd_check_files(args):
+    """Check whether the given files overlap with locked_files of another
+    error already in-flight (auto-fixed statuses) in the same run. Prints
+    the conflicting error id(s) and exits 1 on conflict, 0 if clear."""
+    data = load(args.registry)
+    find_run(data, args.run_id)  # validates run exists
+    candidate = set(args.files.split(","))
+    conflicts = []
+    for eid, e in data["errors"].items():
+        if eid == args.error_id:
+            continue
+        if args.run_id not in e.get("runs", []):
+            continue
+        if e["status"] not in FIXED_STATUSES:
+            continue
+        overlap = candidate & set(e.get("locked_files") or [])
+        if overlap:
+            conflicts.append((eid, sorted(overlap)))
+    if conflicts:
+        for eid, files in conflicts:
+            print(f"conflict: {eid} already locks {', '.join(files)}", file=sys.stderr)
+        return 1
+    print("no conflict")
     return 0
 
 
@@ -342,7 +372,16 @@ def main():
     p.add_argument("--confidence-fix")
     p.add_argument("--duplicate-group")
     p.add_argument("--note")
+    p.add_argument("--files", help="comma-separated list of files this fix plans to modify, for conflict detection")
     p.set_defaults(fn=cmd_update)
+
+    p = sub.add_parser("check-files")
+    p.add_argument("registry", nargs="?", default=None,
+                    help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--error-id", required=True, help="the error about to branch — excluded from its own conflict check")
+    p.add_argument("--files", required=True, help="comma-separated list of files this fix plans to modify")
+    p.set_defaults(fn=cmd_check_files)
 
     p = sub.add_parser("preflight")
     p.add_argument("registry", nargs="?", default=None,

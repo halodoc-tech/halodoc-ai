@@ -202,6 +202,35 @@ error, `registry.py update … --status auto-fixed-mr-pending --note "already ha
 and continue to the next error. Only proceed to step 3 when no open MR exists
 on that branch.
 
+#### 2.5. Check for same-run file conflicts
+
+Two errors in the same batch may localize to the same file. Before branching,
+check the planned files (from Phase 2A's diagnosis) against every error
+already `auto-fixed` in this run:
+
+```bash
+python3 scripts/registry.py check-files --run-id <run_id> --error-id <id> \
+  --files <comma-separated planned file paths>
+```
+
+- **Exit 0** ("no conflict"): proceed to step 3.
+- **Exit 1** (conflict, stderr names the other error and the shared file(s)):
+  do not branch. `registry.py update --run-id <run_id> --error-id <id> --status deferred-conflict --note "conflicts with <other error id> on <file>"`
+  and move to the next queued error. `deferred-conflict` errors are excluded
+  from this run's dedupe (see Phase 2B's re-run dedupe below) and are picked
+  up again on the next auto-heal run, after the conflicting MR has merged —
+  this trades same-run parallelism for merge safety, it does not attempt to
+  reconcile the two fixes into one branch.
+
+When a branch does proceed to step 3, register its planned files immediately
+after creation so later errors in the same run see the lock:
+
+```bash
+python3 scripts/registry.py update --run-id <run_id> --error-id <id> \
+  --status auto-fixed --files <comma-separated planned file paths> \
+  --branch <branch> --branch-point-sha <sha>
+```
+
 #### 3. Branch from latest master — verified
 
 ```bash

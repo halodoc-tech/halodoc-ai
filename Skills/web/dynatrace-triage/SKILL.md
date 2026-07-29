@@ -48,6 +48,13 @@ crashes, or errors from a monitoring source other than Dynatrace.
   schema errors, fall back to CSV.
 - The 75% remediation target is a heuristic default, not a hard
   requirement — adjust to your team's SLA.
+- **Sourcemap unavailability:** if production sourcemaps are disabled by
+  policy and can't be enabled (see [sourcemap-preflight.md](./references/sourcemap-preflight.md)),
+  source localization falls back to heuristics (minified function names,
+  chunk-URL module inference, page-routing correlation). Confidence scores
+  trend lower — expect more `low source confidence` / report-only outcomes.
+  If your Dynatrace plan offers a "deobfuscated stack trace" export option,
+  use that as the best workaround.
 
 ## Progressive Loading
 
@@ -74,6 +81,8 @@ Keep this file as the orchestrator. Load only the extra files you need.
 | [scripts/README.md](./scripts/README.md) | 77 | Script usage and error-handling conventions — Python 3 stdlib only, no `pip install` needed |
 | [evals.json](./evals/evals.json) / [sample_errors.csv](./evals/sample_errors.csv) | — | Sample eval prompts and expected behavior — only when validating the skill itself |
 
+**Note:** files >100 lines include a `## Contents` section at the top for partial-read navigation.
+
 ## Operating Rules
 
 - Act as a senior frontend architect.
@@ -82,12 +91,23 @@ Keep this file as the orchestrator. Load only the extra files you need.
 - Never claim the root cause is fixed unless the contract/lifecycle/state issue is addressed.
 - Never edit vendor files, `dist/`, `node_modules/`, or generated output.
 - Auto-apply, commit, push, and open an MR only when source confidence is not low and fix confidence is high or medium with explicit assumptions.
-- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes; the only allowed human stop is a dirty git tree. **Exception**: IDE/restricted-environment users following the Portability Note workaround manually run the eligibility script and review the resulting work queue before invoking the fixing phase — that's a deliberate preview step made necessary by the environment's restrictions, not a contradiction of "no approval gate" (which describes the fixing phase itself, run inside Claude Code either way).
+- In heal mode (Mode 3), the confidence rule IS the approval gate for **Claude Code users** — never prompt the human for eligible high-confidence fixes once the fixing phase begins; the only allowed stop is a dirty git tree. **Sequencing exception for IDE/restricted users**: the Portability Note workaround has users manually run eligibility filtering and PREVIEW the work queue before starting the fixing phase inside Claude Code — that preview is a deliberate planning step required by the environment's restrictions, not a contradiction of "no approval during fixing" (which describes the fixing phase's behavior once started, whether reached via full auto-orchestration or the manual-preview workaround).
 - In heal mode, one error's failure never aborts the batch: record it in the registry, reset to clean master, continue.
 - In heal mode, every auto-fixed error must produce exactly one MR from a branch provably cut from latest `origin/master`, and every non-fixed eligible error must appear in the run report with a triage writeup. Never widen the confidence gate to reach the remediation-rate target.
+
+**Auto-heal tradeoff:** Mode 3's "confidence gate replaces human approval" design trades pre-merge review for speed and scale. The requirements that make this safe:
+- **Source confidence** ≥ medium: ≥2 aligned signals (function name, module, error property match) localize the source file with high probability.
+- **Fix confidence** ≥ medium: the fix restores a documented invariant (not a blind null guard) and includes a test reproducing the failure path.
+- **Post-merge verification** (see Delivery Expectations below): required Dynatrace queries at 15-60 min and across 7 days catch regressions — a fix that doesn't reduce affected-user counts is reopened.
+- **Rollback procedure** (see Rollback Procedure section): a defined revert path exists for merged fixes that worsen production.
+
+If your team's SLA requires human review for ALL prod changes, use `--dry-run` to stop after the pre-fix visualization (Phase 2A), review the board, then manually invoke fixes one-by-one in Mode 1 instead of batch Mode 3.
+
 - In heal mode, 1st-party is a HARD filter applied before anything else — 3rd-party errors (ad/analytics scripts, browser extensions, opaque cross-origin) never enter the fix queue on a "suspected" basis, but they are still shown (excluded, with reason) on the pre-fix visualization for auditability.
+- `--first-party-domain` takes a bare domain (e.g. `<your-domain>`, no protocol) and matches by **suffix** — `<your-domain>` matches `<your-domain>` itself and any subdomain (`www.<your-domain>`, `app.<your-domain>/resources/chunk.js`), but not unrelated domains that merely contain the string. Pass the flag multiple times to allow multiple first-party domains in one run (e.g. `--first-party-domain <your-domain> --first-party-domain <another-domain>`).
+- **Branch conflict handling:** if two fixes in the same run would modify the same file, their MRs could conflict. Before branching for an error, run `scripts/registry.py check-files --run-id <run> --error-id <id> --files <comma-separated planned files>` against the errors already `auto-fixed` this run. On conflict (nonzero exit), mark the error `deferred-conflict` (`registry.py update ... --status deferred-conflict --note "conflicts with <other error id> on <file>"`) and skip it this run — it re-enters the queue on the next auto-heal run once the conflicting MR has merged. This trades same-run parallelism for merge safety; it does not attempt to reconcile the two fixes automatically. Full protocol: [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B.
 - In heal mode, never touch Dynatrace before Phase -1's data-source choice (token vs. browser vs. CSV) is resolved — ask if not specified.
-- Re-run safety: the registry prevents duplicate MRs — if an error already has an open MR from a prior run, it is skipped rather than re-fixed (see [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B's re-run dedupe).
+- Re-run safety: before branching, the skill checks whether the error ID already has an open or merged MR recorded in the registry; if so, the error is skipped — its existing status (`auto-fixed`/`auto-fixed-mr-pending`/etc.) is left unchanged and a note is appended (e.g. "skipped: already has an open MR from a prior run"), it is not relabeled to a separate "duplicate" status. `reverted`/`reopened`/`deferred-conflict` entries are the exception — those are re-processed, not skipped (see [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B's re-run dedupe for full logic).
 - Never echo `DT_API_TOKEN` values in logs, error messages, or MR bodies — if a token-related operation fails, report "token rejected" / "authentication failed", never the token itself.
 - Never use `innerHTML`, `outerHTML`, `dangerouslySetInnerHTML`, `bypassSecurityTrustHtml`, or `eval()`/`new Function()` in a fix — use safe alternatives (`textContent`, `DomSanitizer`, framework-native rendering) or explicitly document why the risk is unavoidable. Full detail: [architecture-rules.md](./references/architecture-rules.md)'s Security Constraints.
 - If the target repo uses SSR (Angular Universal, Next.js, etc.), ensure fixes avoid browser-only APIs (`window`, `document`, `localStorage`) in SSR-executed code paths — guard with `isPlatformBrowser`/`typeof window !== 'undefined'` or a client-only lifecycle hook.
@@ -110,17 +130,42 @@ cd /path/to/your/frontend-repo
 python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 
-# Windows (PowerShell — forward slashes work fine and stay portable if this ever runs in CI):
-cd C:/path/to/your/frontend-repo
-python3 C:/path/to/dynatrace-triage/scripts/eligibility.py errors.csv `
+# Windows (PowerShell/Git Bash/WSL — all accept forward slashes):
+cd /c/path/to/your/frontend-repo
+python3 /c/path/to/dynatrace-triage/scripts/eligibility.py errors.csv `
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 ```
+
+**Path portability note:** every path in this skill uses forward slashes
+(`/`), which work on Linux, macOS, WSL, Git Bash, and PowerShell. This
+skill requires Claude Code (which runs bash), so native `cmd.exe` isn't a
+supported shell here — use PowerShell, Git Bash, or WSL on Windows.
 
 Then invoke this skill in Claude Code, pointing it at `queue.json`, for the
 diagnosis/fix/MR phase.
 
 This gives restricted-environment users the eligibility-filtering and
 registry tooling even when full auto-fix orchestration requires Claude Code.
+
+## CSV Input Schema
+
+When using `--csv <path>` (or a Dynatrace Error Inspector export), the file must contain these columns (`scripts/eligibility.py`'s actual parser — column order doesn't matter, names must match exactly, emoji included):
+
+| Column | Description |
+|--------|-------------|
+| `error.id` | Unique Dynatrace error ID |
+| `❌ Error` | The exception name/message |
+| `🚨 Severity` | Dynatrace-assigned severity |
+| `🧠 Signal` | Dynatrace's own signal/confidence label for the error |
+| `👥 Users` | Count of unique affected users in the export window |
+| `🔁 Count` | Total occurrence count |
+| `👨‍💻 Teams` | Team(s) Dynatrace attributes the error to, if tagged |
+| `🌐 Top Pages` | Pages where the error occurred most |
+| `🌍 Browsers` | Browsers where the error occurred |
+
+**Export instructions:** In Dynatrace, open Error Inspector → Explorer, filter to your frontend and a 7-day window, and export the table as CSV — the column headers above are Dynatrace's own export headers, not a custom format this skill invented.
+
+**Fallback:** If a required column is missing, `eligibility.py` fails at parse time naming the missing column. Live-pull (browser/token) paths emit an equivalent JSON row list with the same fields under plain (non-emoji) keys — see [live-pull.md](./references/live-pull.md) / [token-pull.md](./references/token-pull.md).
 
 ## Confidence Scoring (Summary)
 
@@ -133,6 +178,8 @@ registry tooling even when full auto-fix orchestration requires Claude Code.
 **Auto-fix gate (Mode 3)**: high source + high fix, OR medium source +
 medium fix with assumptions. Low confidence on either axis → report-only,
 never a guess. Full rubric and fix-hierarchy: [architecture-rules.md](./references/architecture-rules.md).
+
+If this summary ever conflicts with the full rubric in [architecture-rules.md](./references/architecture-rules.md), **the full rubric takes precedence** — this table is a quick reference, not the canonical definition.
 
 **Example**: error `Cannot read properties of undefined (reading 'push')`
 at `<your-domain>/resources/chunk-123.js:5:234`. The stack shows function
@@ -180,6 +227,8 @@ Then:
 ### Mode 3: Auto-Heal Batch
 
 Trigger phrases: "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", "remediate Dynatrace errors in batch" (bare "heal" alone is deliberately NOT a trigger — too ambiguous, especially in health-related products).
+
+**Mode disambiguation:** a phrase like "fix all errors" could plausibly mean Mode 1 (a single error literally named "all") or Mode 3 (batch). Check for Mode 3 keywords first (above); if none are present AND no `--csv`/`--source` flag or batch-scale context (multiple error IDs, a CSV path) is given, ask: "Do you mean fixing a single error, or batch-fixing all errors via auto-heal?" — Mode 3 is the higher-stakes, no-approval operation, so confirm before proceeding on an ambiguous phrase.
 
 Command pattern: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
@@ -243,3 +292,23 @@ or increase, reopen the error for deeper investigation — the fix may have
 been a symptom patch, not a root-cause resolution. See
 [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4 for the
 full verification protocol.
+
+## Rollback Procedure
+
+If post-merge verification shows affected-user counts stable or increasing
+after a fix MR merges:
+
+1. **Revert**: `git revert -m 1 <merge-commit-sha>`, fast-track the revert
+   through review. `registry.py update … --status reverted --note "<why>"`.
+2. **Re-analyze**: `registry.py update … --status reopened --note "<what verification showed>"`
+   — the original fix was a symptom patch. Return to Phase 2A with deeper
+   evidence (reproduce locally, profile, re-check lifecycle assumptions)
+   rather than re-running the same diagnosis.
+3. **Forensics**: compare the reverted fix's changed files against the
+   error's stack frames — if the fix touched a file the stack trace never
+   named, source confidence was overestimated; tighten the confidence gate
+   before the next attempt.
+
+A `reverted` or `reopened` entry is excluded from future re-run dedupe — it
+will be re-processed on the next heal run rather than silently skipped as
+"already fixed." Full step-by-step protocol: [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 4.
