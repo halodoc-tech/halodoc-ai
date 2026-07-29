@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Eligibility filter for auto-heal (Mode 3).
 
-Reads error rows from ANY of the three acquisition paths — a Dynatrace Error
-Inspector CSV export, or a canonical JSON row list produced by the live
-browser-pull or token/DQL-pull workflows (see references/live-pull.md /
-references/token-pull.md) — and emits a work-queue JSON:
+Reads the canonical JSON row list produced by the browser-driven live-pull
+of the Dynatrace Error Inspector Explorer (see references/live-pull.md) and
+emits a work-queue JSON:
 
 - eligible errors (1st-party AND affected users >= threshold), sorted by
   affected users descending
@@ -18,15 +17,13 @@ stack-frame check in the auto-heal workflow is a second, stricter gate on top
 of this.
 
 usage:
-  eligibility.py <csv_path> --first-party-domain example.com [--min-users 100] [--out queue.json]
-  eligibility.py --json <rows.json> --first-party-domain example.com [--min-users 100] [--out queue.json]
+  eligibility.py <rows.json> --first-party-domain example.com [--min-users 100] [--out queue.json]
 
 --first-party-domain is REQUIRED — pass your own site's domain(s) (repeat the
 flag for multiple). There is no default: guessing a domain for you would
 silently misclassify every row on a project that isn't yours.
 """
 import argparse
-import csv
 import json
 import re
 import sys
@@ -54,18 +51,7 @@ LEADING_HOSTNAME = re.compile(
 
 VENDOR_RE = re.compile("|".join(VENDOR_PATTERNS), re.IGNORECASE)
 
-# Column names as exported by Dynatrace Error Inspector.
-COL_ID = "error.id"
-COL_ERROR = "❌ Error"
-COL_SEVERITY = "🚨 Severity"
-COL_SIGNAL = "🧠 Signal"
-COL_USERS = "👥 Users"
-COL_COUNT = "🔁 Count"
-COL_TEAMS = "👨‍💻 Teams"
-COL_PAGES = "🌐 Top Pages"
-COL_BROWSERS = "🌍 Browsers"
-
-# Canonical JSON row keys (what live-pull.md / token-pull.md must emit).
+# Canonical JSON row keys (what live-pull.md must emit).
 JSON_KEYS = (
     "error_id", "error_text", "severity", "signal",
     "users", "count", "teams", "top_pages", "browsers",
@@ -110,20 +96,6 @@ def third_party_signals(error_text, first_party_domains):
     return signals
 
 
-def normalize_csv_row(row):
-    return {
-        "error_id": (row.get(COL_ID) or "").strip(),
-        "error_text": (row.get(COL_ERROR) or "").strip(),
-        "severity": (row.get(COL_SEVERITY) or "").strip(),
-        "signal": (row.get(COL_SIGNAL) or "").strip(),
-        "users": row.get(COL_USERS),
-        "count": row.get(COL_COUNT),
-        "teams": (row.get(COL_TEAMS) or "").strip(),
-        "top_pages": (row.get(COL_PAGES) or "").strip(),
-        "browsers": (row.get(COL_BROWSERS) or "").strip(),
-    }
-
-
 def normalize_json_row(row):
     return {key: row.get(key) for key in JSON_KEYS}
 
@@ -166,16 +138,6 @@ def classify_row(normalized, min_users, first_party_domains):
 
     entry["eligible"] = True
     return entry
-
-
-def load_csv_rows(csv_path):
-    rows = []
-    with csv_path.open(newline="", encoding="utf-8-sig") as handle:
-        for row in csv.DictReader(handle):
-            if not (row.get(COL_ID) or "").strip():
-                continue  # blank/trailing rows
-            rows.append(normalize_csv_row(row))
-    return rows
 
 
 class InputError(Exception):
@@ -227,41 +189,25 @@ def build_result(input_path, normalized_rows, min_users, first_party_domains):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("csv_path", type=Path, nargs="?", help="Dynatrace Error Inspector CSV export")
-    ap.add_argument("--json", type=Path, default=None, help="canonical JSON row list (live-pull / token-pull output)")
+    ap.add_argument("rows_json", type=Path, help="canonical JSON row list from the live-pull (see references/live-pull.md)")
     ap.add_argument("--min-users", type=int, default=100)
     ap.add_argument("--first-party-domain", action="append", dest="first_party_domains", required=True,
                      help="your site's domain (repeatable for multiple domains) — REQUIRED, no default")
     ap.add_argument("--out", type=Path, default=None)
     args = ap.parse_args()
 
-    if bool(args.csv_path) == bool(args.json):
-        print("provide exactly one of: csv_path, --json", file=sys.stderr)
-        return 2
-
     first_party_domains = args.first_party_domains
 
+    if not args.rows_json.exists():
+        print(f"file not found: {args.rows_json}", file=sys.stderr)
+        return 1
     try:
-        if args.json:
-            if not args.json.exists():
-                print(f"file not found: {args.json}", file=sys.stderr)
-                return 1
-            input_path = args.json
-            normalized_rows = load_json_rows(args.json)
-        else:
-            if not args.csv_path.exists():
-                print(f"file not found: {args.csv_path}", file=sys.stderr)
-                return 1
-            input_path = args.csv_path
-            normalized_rows = load_csv_rows(args.csv_path)
+        normalized_rows = load_json_rows(args.rows_json)
     except InputError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    except (UnicodeDecodeError, csv.Error) as exc:
-        print(f"malformed input file: {exc}", file=sys.stderr)
-        return 1
 
-    result = build_result(input_path, normalized_rows, args.min_users, first_party_domains)
+    result = build_result(args.rows_json, normalized_rows, args.min_users, first_party_domains)
 
     output = json.dumps(result, indent=2, ensure_ascii=False)
     if args.out:

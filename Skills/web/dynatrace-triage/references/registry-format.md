@@ -41,7 +41,7 @@ explicit registry path is passed on the command line.
 | `update` | every per-error status change (initial classification, fix, MR, downgrade) |
 | `finalize` | Phase 3, computes and freezes run metrics |
 | `report` | Phase 3, renders + saves the markdown run report |
-| `verify` | Phase 4, transitions statuses against a fresh CSV |
+| `verify` | Phase 4, transitions statuses against a fresh live-pull |
 
 ## Schema
 
@@ -50,7 +50,7 @@ explicit registry path is passed on the command line.
   "runs": [{
     "run_id": "heal-2026-07-03-1",
     "started_at": "…", "finished_at": "…",
-    "csv_path": "…", "repo": "…", "base_sha": "…",
+    "source": "…", "repo": "…", "base_sha": "…",
     "min_users": 100,
     "preflight": {"sourcemaps": "already-enabled | enabled-in-mr <url> | failed: <why>"},
     "metrics": {
@@ -80,11 +80,11 @@ explicit registry path is passed on the command line.
 ## Status lifecycle
 
 ```text
-(csv row) ─► skipped-below-threshold          terminal for the run
-          ─► skipped-3rd-party                terminal for the run
-          ─► reported                          low confidence / test-gate failure
-          ─► auto-fixed ───────────────► resolved-verified      (verify: absent from fresh CSV)
-          ─► auto-fixed-mr-pending ─┘└──► regressed-or-unmerged (verify: still present)
+(live-pull row) ─► skipped-below-threshold    terminal for the run
+               ─► skipped-3rd-party           terminal for the run
+               ─► reported                     low confidence / test-gate failure
+               ─► auto-fixed ───────────────► resolved-verified      (verify: absent from fresh pull)
+               ─► auto-fixed-mr-pending ─┘└──► regressed-or-unmerged (verify: still present)
 ```
 
 - `auto-fixed-mr-pending` = fix pushed but `glab` was unavailable; the exact
@@ -102,7 +102,7 @@ explicit registry path is passed on the command line.
 
 ## Run report structure (rendered by `registry.py report`)
 
-1. Header: run id, repo, CSV, base SHA, timestamps, sourcemap preflight result
+1. Header: run id, repo, source, base SHA, timestamps, sourcemap preflight result
 2. Blockers (e.g. `glab` missing) — only when present
 3. Metrics table with the target verdict line
    (`Remediation rate: 10/12 = 83% — TARGET MET ✅`)

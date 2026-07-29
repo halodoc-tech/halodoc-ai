@@ -1,23 +1,23 @@
 # Auto-Heal Workflow (Mode 3)
 
-Batch pipeline: pick a data source, pull errors, hard-filter to 1st-party
-eligible errors, diagnose all of them, show the plan, THEN fix — with NO
-human approval gate on the fixing itself (the confidence rules ARE that
-gate). Every auto-fixed error produces exactly one MR. Low-confidence errors
-are report-only. All outcomes land in the attribution registry
-([registry-format.md](./registry-format.md)) and a readable visual board
-([visualization.md](./visualization.md)).
+Batch pipeline: live-pull errors from the Dynatrace Error Inspector
+dashboard, hard-filter to 1st-party eligible errors, diagnose all of them,
+show the plan, THEN fix — with NO human approval gate on the fixing itself
+(the confidence rules ARE that gate). Every auto-fixed error produces
+exactly one MR. Low-confidence errors are report-only. All outcomes land in
+the attribution registry ([registry-format.md](./registry-format.md)) and a
+readable visual board ([visualization.md](./visualization.md)).
 
-Command: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
+Command: `dynatrace_triage heal --frontend <frontend-id> --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
-Read before acting: [live-pull.md](./live-pull.md), [token-pull.md](./token-pull.md),
+Read before acting: [live-pull.md](./live-pull.md),
 [eligibility.md](./eligibility.md), [visualization.md](./visualization.md),
 [architecture-rules.md](./architecture-rules.md), [mr-format.md](./mr-format.md),
 [sourcemap-preflight.md](./sourcemap-preflight.md).
 
 ## Contents
 
-- [Phase -1: Data source selection](#phase--1-data-source-selection)
+- [Phase -1: Acquisition setup](#phase--1-acquisition-setup)
 - [Phase 0: Preconditions](#phase-0-preconditions)
 - [Phase 1: Build the work queue](#phase-1-build-the-work-queue)
 - [Phase 2A: Diagnose all](#phase-2a-diagnose-all-no-side-effects)
@@ -33,30 +33,27 @@ run_id   = heal-<YYYY-MM-DD>-<n>
 registry = ${REGISTRY_PATH:-~/.claude/dynatrace-triage-workspace/<repo-name>}/registry.json
 ```
 
-## Phase -1: Data source selection
+## Phase -1: Acquisition setup
 
-**Before any Dynatrace access happens**, determine the acquisition path:
+**Before any Dynatrace access happens**, resolve the two required inputs —
+there is no data-source choice to make; Mode 3 always live-pulls from the
+Error Inspector Explorer per [live-pull.md](./live-pull.md):
 
-- `--csv <path>` given → use it directly (fallback path, unchanged from v3).
-- Otherwise, if `--source` is given (`token` or `browser`), use it.
-- Otherwise, **ask**: "Pull live from Dynatrace using an API token, or via
-  the Chrome browser session? (or provide a CSV export instead)" — this is a
-  real choice with real trade-offs (token needs `DT_API_TOKEN` + an unproven
-  schema for browser data; browser needs an authenticated Chrome tab but no
-  new credentials) and must not be silently defaulted.
-
-Route to [token-pull.md](./token-pull.md) or [live-pull.md](./live-pull.md)
-accordingly. Both must emit the same canonical row JSON
-([eligibility.md](./eligibility.md)'s schema) so everything downstream is
-identical regardless of path. If the chosen path hits a hard blocker (token
-rejected, schema undiscoverable, no browser session), report it and offer to
-fall back to one of the other two — never silently guess.
+- `--frontend <frontend-id>` — the Dynatrace `Frontend` filter value for the
+  target app (e.g. `my-app-prod`). Read from the invocation, or ask
+  if not given.
+- `--first-party-domain <domain>` — the app's own domain, for
+  `eligibility.py`'s hard 1st-party filter. Read from the invocation, or ask
+  if not given.
+- Confirm a Chrome session with access to the Dynatrace tenant is available
+  (`mcp__claude-in-chrome__*` tools). If not, stop and tell the user Mode 3
+  cannot run without it — there is no CSV or token fallback.
 
 **Sanity-check the domain pairing**: confirm `--first-party-domain` actually
-corresponds to the same site as the Dynatrace `Frontend` filter being pulled
-(e.g. domain `shop.example.com` should not be paired with a Frontend named
-`blog-prod`). If they look unrelated, ask before proceeding — a mismatched
-pair silently misclassifies every row in `eligibility.py`.
+corresponds to the same site as `--frontend` (e.g. domain
+`shop.example.com` should not be paired with a Frontend named `blog-prod`).
+If they look unrelated, ask before proceeding — a mismatched pair silently
+misclassifies every row in `eligibility.py`.
 
 ## Phase 0: Preconditions
 
@@ -71,25 +68,25 @@ command -v glab                       # note if missing — do NOT abort
 Rules:
 
 - **Dirty tree is the ONLY allowed human stop in Mode 3** (besides the Phase
-  -1 source choice, which is a legitimate up-front decision, not a stop) —
+  -1 acquisition setup, which is a legitimate up-front step, not a stop) —
   ask stash/abort.
 - `glab` missing does NOT abort the run: fixes are still made and pushed;
   MRs become `auto-fixed-mr-pending` with the exact `glab mr create` command
   recorded (see Phase 2B step 7).
 - Initialize the registry immediately:
-  `python3 scripts/registry.py init <registry> --run-id <run_id> --csv <source-description> --base-sha <sha> --repo <repo> --min-users <n>`
+  `python3 scripts/registry.py init <registry> --run-id <run_id> --source <rows.json path> --base-sha <sha> --repo <repo> --min-users <n>`
 - Run the sourcemap preflight ([sourcemap-preflight.md](./sourcemap-preflight.md))
   and record the result:
   `python3 scripts/registry.py preflight <registry> --run-id <run_id> --result "<result>"`
 
 ## Phase 1: Build the work queue
 
-Acquire rows per the Phase -1 choice (browser: [live-pull.md](./live-pull.md);
-token: [token-pull.md](./token-pull.md); csv: existing export), scoped to the
-**7-day rolling window** (widened from the original 3 days), then:
+Acquire rows via [live-pull.md](./live-pull.md), scoped to the **7-day
+rolling window** (`tf=now-7d;now` — always rewrite a shorter default if the
+dashboard URL carries one), then:
 
 ```bash
-python3 scripts/eligibility.py <csv-or-json-flag> --min-users <n> --first-party-domain <domain> --out <workspace>/queue-<run_id>.json
+python3 scripts/eligibility.py <rows.json> --min-users <n> --first-party-domain <domain> --out <workspace>/queue-<run_id>.json
 ```
 
 Register EVERY row up front so even a crashed run leaves a record:
@@ -383,8 +380,8 @@ count actually dropped — run it proactively:
 1. **Wait for deployment.** Timing depends on your deploy pipeline —
    typically 15-60 minutes for a frontend release. Check the merged MR's
    pipeline/deploy status rather than guessing.
-2. **Re-pull Dynatrace** for the same window (7 days) via whichever
-   acquisition path was used originally (browser/token/CSV).
+2. **Re-pull Dynatrace** for the same window (7 days) via the same
+   [live-pull.md](./live-pull.md) procedure used originally.
 3. **Run verify**:
    ```bash
    python3 scripts/registry.py verify <registry> --run-id <new_run_id> --fresh-source <fresh-source>

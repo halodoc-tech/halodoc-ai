@@ -2,7 +2,7 @@
 name: dynatrace-triage
 version: "1.0.0"
 maintainer: "halodoc-ai"
-description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors. Operates in three modes — (1) single-error fix: trigger on "fix this Dynatrace error", "investigate this production error", or a specific error id; (2) strategic summary: trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes"; (3) auto-healing batch pipeline: trigger with "auto-heal", "batch fix Dynatrace errors", "remediate Dynatrace errors in batch" — pulls errors from Dynatrace (API/browser/CSV), hard-filters to 1st-party exceptions (>=100 users, 7-day window), shows a pre-fix plan, auto-fixes high-confidence errors with no approval prompt, opens one Git MR per error. Scope: Dynatrace-sourced browser/client-side errors only — not backend 5xx/4xx, mobile crashes, or non-Dynatrace sources.
+description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors. Operates in three modes — (1) single-error fix: trigger on "fix this Dynatrace error", "investigate this production error", or a specific error id; (2) strategic summary: trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes"; (3) auto-healing batch pipeline: trigger with "auto-heal", "batch fix Dynatrace errors", "remediate Dynatrace errors in batch" — live-pulls errors from the Dynatrace Error Inspector dashboard, hard-filters to 1st-party exceptions (>=100 users, 7-day window), shows a pre-fix plan, auto-fixes high-confidence errors with no approval, opens one Git MR per error. Scope: Dynatrace browser/client-side errors only — not backend 5xx/4xx, mobile crashes, or non-Dynatrace sources.
 compatibility: Claude Code only — requires direct repo filesystem access and bash tools
 ---
 
@@ -18,8 +18,7 @@ supply your own values before running Mode 3:
 | Setting | Where | Notes |
 |---|---|---|
 | Your site's domain(s) | `--first-party-domain` flag (required, no default) | Used for the hard 1st-party filter — see [eligibility.md](./references/eligibility.md) |
-| Dynatrace app/frontend id | Phase -1 source pull ([live-pull.md](./references/live-pull.md) / [token-pull.md](./references/token-pull.md)) | The "Frontend" filter value in Dynatrace's Error Inspector |
-| `DT_API_TOKEN` (optional) | your shell / CI secret | Only needed for the token/DQL acquisition path; scope `storage:query:read` |
+| Dynatrace app/frontend id | `--frontend` flag (Phase -1, [live-pull.md](./references/live-pull.md)) | The "Frontend" filter value in Dynatrace's Error Inspector |
 | Sourcemap storage location | [sourcemaps.md](./references/sourcemaps.md) | Wherever your build pipeline deploys production `.js.map` files |
 | Your route → module map | [module-map.md](./references/module-map.md) | Build this once from your own routing config |
 
@@ -41,11 +40,12 @@ crashes, or errors from a monitoring source other than Dynatrace.
   Bitbucket support.
 - Requires Python 3, bash, and git; the `glab`/`gh` CLI is optional (its
   absence is a recorded blocker, not a hard stop).
-- Live-pull modes (`--source token`/`--source browser`) depend on
-  Dynatrace API/browser-UI data shapes that may evolve without notice —
-  see [token-pull.md](./references/token-pull.md)'s schema-discovery step.
-  **CSV export is the most stable data source**; if a live-pull run hits
-  schema errors, fall back to CSV.
+- The live-pull depends on the Dynatrace Error Inspector Explorer's current
+  UI shape ([live-pull.md](./references/live-pull.md)), which may change
+  without notice between Dynatrace releases — locate elements fresh each run
+  rather than hardcoding coordinates/selectors. There is no CSV or API-token
+  fallback; Mode 3 requires an interactive Claude Code session with Chrome
+  browser access.
 - The 75% remediation target is a heuristic default, not a hard
   requirement — adjust to your team's SLA.
 - **Sourcemap unavailability:** if production sourcemaps are disabled by
@@ -70,8 +70,7 @@ Keep this file as the orchestrator. Load only the extra files you need.
 | [sourcemaps.md](./references/sourcemaps.md) | 106 | Deobfuscating minified `<your-domain>/resources/*.js` frames |
 | [auto-heal-workflow.md](./references/auto-heal-workflow.md) | 394 | Mode 3 batch pipeline (load early for any heal run) |
 | [eligibility.md](./references/eligibility.md) | 120 | Auto-heal targeting rules (users threshold, hard 1st/3rd-party filter) |
-| [live-pull.md](./references/live-pull.md) | 123 | Pulling errors live via an authenticated Chrome session |
-| [token-pull.md](./references/token-pull.md) | 135 | Pulling errors live via `DT_API_TOKEN`/DQL |
+| [live-pull.md](./references/live-pull.md) | 123 | Pulling errors live via an authenticated Chrome session — the only Mode 3 acquisition path |
 | [visualization.md](./references/visualization.md) | 89 | The pre-fix triage board and post-run fixed/not-fixed board — rendered as Claude Code HTML Artifacts, redeployed to the same URL between the pre- and post-run render |
 | [sourcemap-preflight.md](./references/sourcemap-preflight.md) | 53 | Checking/enabling production sourcemaps — a read/write check: no-op if already enabled, else its own dedicated branch/MR (never mixed into an error-fix branch) |
 | [registry-format.md](./references/registry-format.md) | 104 | The attribution registry schema and run report |
@@ -106,9 +105,8 @@ If your team's SLA requires human review for ALL prod changes, use `--dry-run` t
 - In heal mode, 1st-party is a HARD filter applied before anything else — 3rd-party errors (ad/analytics scripts, browser extensions, opaque cross-origin) never enter the fix queue on a "suspected" basis, but they are still shown (excluded, with reason) on the pre-fix visualization for auditability.
 - `--first-party-domain` takes a bare domain (e.g. `<your-domain>`, no protocol) and matches by **suffix** — `<your-domain>` matches `<your-domain>` itself and any subdomain (`www.<your-domain>`, `app.<your-domain>/resources/chunk.js`), but not unrelated domains that merely contain the string. Pass the flag multiple times to allow multiple first-party domains in one run (e.g. `--first-party-domain <your-domain> --first-party-domain <another-domain>`).
 - **Branch conflict handling:** if two fixes in the same run would modify the same file, their MRs could conflict. Before branching for an error, run `scripts/registry.py check-files --run-id <run> --error-id <id> --files <comma-separated planned files>` against the errors already `auto-fixed` this run. On conflict (nonzero exit), mark the error `deferred-conflict` (`registry.py update ... --status deferred-conflict --note "conflicts with <other error id> on <file>"`) and skip it this run — it re-enters the queue on the next auto-heal run once the conflicting MR has merged. This trades same-run parallelism for merge safety; it does not attempt to reconcile the two fixes automatically. Full protocol: [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B.
-- In heal mode, never touch Dynatrace before Phase -1's data-source choice (token vs. browser vs. CSV) is resolved — ask if not specified.
+- In heal mode, never touch Dynatrace before Phase -1's `--frontend` and `--first-party-domain` values are resolved — ask if not specified.
 - Re-run safety: before branching, the skill checks whether the error ID already has an open or merged MR recorded in the registry; if so, the error is skipped — its existing status (`auto-fixed`/`auto-fixed-mr-pending`/etc.) is left unchanged and a note is appended (e.g. "skipped: already has an open MR from a prior run"), it is not relabeled to a separate "duplicate" status. `reverted`/`reopened`/`deferred-conflict` entries are the exception — those are re-processed, not skipped (see [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B's re-run dedupe for full logic).
-- Never echo `DT_API_TOKEN` values in logs, error messages, or MR bodies — if a token-related operation fails, report "token rejected" / "authentication failed", never the token itself.
 - Never use `innerHTML`, `outerHTML`, `dangerouslySetInnerHTML`, `bypassSecurityTrustHtml`, or `eval()`/`new Function()` in a fix — use safe alternatives (`textContent`, `DomSanitizer`, framework-native rendering) or explicitly document why the risk is unavoidable. Full detail: [architecture-rules.md](./references/architecture-rules.md)'s Security Constraints.
 - If the target repo uses SSR (Angular Universal, Next.js, etc.), ensure fixes avoid browser-only APIs (`window`, `document`, `localStorage`) in SSR-executed code paths — guard with `isPlatformBrowser`/`typeof window !== 'undefined'` or a client-only lifecycle hook.
 - Prefer fixing the root invariant over adding a heavy defensive dependency — a null guard is fine; importing a utility library for one helper call is not. If a fix genuinely needs a new dependency, justify the bundle-size impact in the MR body.
@@ -121,29 +119,30 @@ access, bash tools, and to run the bundled Python scripts. It will NOT work
 in the Claude.ai web UI or in IDE extensions with restricted script
 execution.
 
-**Workaround for IDE/restricted-environment users**: this workaround needs
-**two separate environments** — only the eligibility-filtering step runs
-outside Claude Code; the diagnosis/fix/MR phase still requires a real
-Claude Code session (desktop app or CLI), not the restricted IDE extension.
-Clone the skill's scripts and run them manually in any shell with Python 3
-(your local machine, WSL, a CI runner — the restricted IDE's own terminal
-works fine for this part), then bring the resulting `queue.json` into a
-separate Claude Code session for the fixing phase:
+**Workaround for IDE/restricted-environment users**: Mode 3's live-pull step
+itself has no substitute — it requires `claude-in-chrome` tools inside a
+Claude Code session, full stop. What CAN run outside Claude Code is the
+eligibility-filtering script, if you hand-build the row list yourself (copy
+the Error Name/Affected Users/etc. columns visible in the Dynatrace Error
+Inspector Explorer UI into a JSON file matching the schema below) — this
+needs **two separate environments**: any shell with Python 3 for filtering,
+and a separate Claude Code session (desktop app or CLI) for the
+diagnosis/fix/MR phase:
 
 ```bash
 # Linux/macOS:
 cd /path/to/your/frontend-repo
-python3 /path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
+python3 /path/to/dynatrace-triage/scripts/eligibility.py rows.json \
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 
 # Windows — PowerShell (uses backtick ` for line continuation, shown below):
 cd /c/path/to/your/frontend-repo
-python3 /c/path/to/dynatrace-triage/scripts/eligibility.py errors.csv `
+python3 /c/path/to/dynatrace-triage/scripts/eligibility.py rows.json `
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 
 # Windows — Git Bash/WSL (uses backslash \ for line continuation, like Linux/macOS):
 cd /c/path/to/your/frontend-repo
-python3 /c/path/to/dynatrace-triage/scripts/eligibility.py errors.csv \
+python3 /c/path/to/dynatrace-triage/scripts/eligibility.py rows.json \
   --first-party-domain <your-domain> --min-users 100 --out queue.json
 ```
 
@@ -159,27 +158,28 @@ Then invoke this skill in Claude Code, pointing it at `queue.json`, for the
 diagnosis/fix/MR phase.
 
 This gives restricted-environment users the eligibility-filtering and
-registry tooling even when full auto-fix orchestration requires Claude Code.
+registry tooling even when the live-pull and full auto-fix orchestration
+require Claude Code.
 
-## CSV Input Schema
+## Row Schema
 
-When using `--csv <path>` (or a Dynatrace Error Inspector export), the file must contain these columns (`scripts/eligibility.py`'s actual parser — column order doesn't matter, names must match exactly, emoji included):
+`scripts/eligibility.py` takes a JSON row list (a bare list, or `{"rows": [...]}`) — this is what [live-pull.md](./references/live-pull.md) must emit from the Explorer, and what a manual restricted-environment workaround must hand-author:
 
-| Column | Description |
+| Key | Description |
 |--------|-------------|
-| `error.id` | Unique Dynatrace error ID |
-| `❌ Error` | The exception name/message |
-| `🚨 Severity` | Dynatrace-assigned severity |
-| `🧠 Signal` | Dynatrace's own signal/confidence label for the error |
-| `👥 Users` | Count of unique affected users in the export window |
-| `🔁 Count` | Total occurrence count |
-| `👨‍💻 Teams` | Team(s) Dynatrace attributes the error to, if tagged |
-| `🌐 Top Pages` | Pages where the error occurred most |
-| `🌍 Browsers` | Browsers where the error occurred |
+| `error_id` | Stable id for the error — the Explorer UI doesn't expose one directly, so live-pull derives it (e.g. a short hash of the normalized error text); it just needs to be stable across runs so dedupe/re-run logic works |
+| `error_text` | The exception name/message (the Explorer's "Error Name" column) |
+| `severity` | Dynatrace-assigned severity, if available |
+| `signal` | Dynatrace's own signal/confidence label, if available |
+| `users` | Count of unique affected users in the pulled window |
+| `count` | Total occurrence count |
+| `teams` | Team(s) Dynatrace attributes the error to, if tagged |
+| `top_pages` | Pages where the error occurred most |
+| `browsers` | Browsers where the error occurred |
 
-**Export instructions:** In Dynatrace, open Error Inspector → Explorer, filter to your frontend and a 7-day window, and export the table as CSV — the column headers above are Dynatrace's own export headers, not a custom format this skill invented.
+Only `error_id`, `error_text`, and `users` are required for the eligibility classification pass; the rest may be empty strings and get filled in later, per-candidate, from the row's detail drill-down (Phase 2A diagnosis).
 
-**Fallback:** If a required column is missing, `eligibility.py` fails at parse time naming the missing column. Live-pull (browser/token) paths emit an equivalent JSON row list with the same fields under plain (non-emoji) keys — see [live-pull.md](./references/live-pull.md) / [token-pull.md](./references/token-pull.md).
+**Fallback:** If the JSON is malformed or not a list, `eligibility.py` fails at parse time with a clear message naming the problem.
 
 ## Confidence Scoring (Summary)
 
@@ -195,8 +195,6 @@ The full rubric — the only canonical definition — lives in [architecture-rul
 medium fix with explicit assumptions written into the MR and registry. Low
 confidence on either axis → report-only, never a guess. Full rubric and
 fix-hierarchy: [architecture-rules.md](./references/architecture-rules.md).
-
-If this summary ever conflicts with the full rubric in [architecture-rules.md](./references/architecture-rules.md), **the full rubric takes precedence** — this table is a quick reference, not the canonical definition.
 
 **Example**: error `Cannot read properties of undefined (reading 'push')`
 at `<your-domain>/resources/chunk-123.js:5:234`. The stack shows function
@@ -245,9 +243,9 @@ Then:
 
 Trigger phrases: "auto-heal", "batch fix Dynatrace errors", "fix all Dynatrace errors", "remediate Dynatrace errors in batch" ("heal" with **no other context** — i.e. the single word alone — is deliberately NOT a trigger, too ambiguous in health-related products; but "heal these errors", "heal the Dynatrace issues", or "heal the cart page crashes" all carry enough context to trigger Mode 3 like the phrases above).
 
-**Mode disambiguation:** a phrase like "fix all errors" could plausibly mean Mode 1 (a single error literally named "all") or Mode 3 (batch). Check for Mode 3 keywords first (above); if none are present AND no `--csv`/`--source` flag or batch-scale context (multiple error IDs, a CSV path) is given, ask: "Do you mean fixing a single error, or batch-fixing all errors via auto-heal?" — Mode 3 is the higher-stakes, no-approval operation, so confirm before proceeding on an ambiguous phrase.
+**Mode disambiguation:** a phrase like "fix all errors" could plausibly mean Mode 1 (a single error literally named "all") or Mode 3 (batch). Check for Mode 3 keywords first (above); if none are present AND no `--frontend` flag or batch-scale context (multiple error IDs) is given, ask: "Do you mean fixing a single error, or batch-fixing all errors via auto-heal?" — Mode 3 is the higher-stakes, no-approval operation, so confirm before proceeding on an ambiguous phrase.
 
-Command pattern: `dynatrace_triage heal [--csv <path> | --source token|browser] --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
+Command pattern: `dynatrace_triage heal --frontend <frontend-id> --first-party-domain <domain> [--repo <path>] [--min-users 100] [--dry-run]`
 
 **CI users:** set `REGISTRY_PATH=/workspace/registry.json` (or any
 persistent path) to override the default `~/.claude/…` location, which
@@ -255,20 +253,18 @@ doesn't survive an ephemeral CI home.
 
 Read these before acting:
 - [auto-heal-workflow.md](./references/auto-heal-workflow.md)
-- [live-pull.md](./references/live-pull.md) / [token-pull.md](./references/token-pull.md) (per chosen source)
+- [live-pull.md](./references/live-pull.md)
 - [eligibility.md](./references/eligibility.md)
 - [visualization.md](./references/visualization.md)
 - [architecture-rules.md](./references/architecture-rules.md)
 - [mr-format.md](./references/mr-format.md)
 
 Then:
-1. **Phase -1**: resolve the data source. **Recommended default: CSV
-   export** — most stable, no credential setup, and the safest choice for
-   anyone unfamiliar with the live-pull paths' schema risk (see
-   Limitations above). Use `--source browser` or `--source token` only
-   when fresher-than-latest-export data is genuinely needed. If a CSV path
-   is given → use it directly; else read `--source`, or ask (token vs.
-   browser) if neither is specified — BEFORE touching Dynatrace.
+1. **Phase -1**: resolve `--frontend` and `--first-party-domain` (ask if
+   either isn't specified) and confirm a Chrome session with tenant access
+   is available — BEFORE touching Dynatrace. There is no other acquisition
+   path to choose between; Mode 3 always live-pulls via
+   [live-pull.md](./references/live-pull.md).
 2. Run Phase 0 preconditions: verify Python 3 is available (`python3 --version`; if not found, tell the user "Python 3 is required but not installed — install it or run in an environment where it's available" and stop), clean tree, latest master, sourcemap preflight, registry init.
 3. Pull errors via the chosen path (7-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row. **If the queue is empty after filtering** (every row was 3rd-party or below the users threshold), print "No eligible errors found — 0 errors passed the 1st-party filter and min-users threshold. Nothing to fix." and exit cleanly — do not create registry entries beyond the `init` record, do not render the visualization, and do not proceed to Phase 2A/2B.
 4. **Phase 2A**: diagnose every eligible error (evidence, confidence, planned action) with no side effects yet.
@@ -279,11 +275,11 @@ Then:
 
 ## Worked Example — Mode 3 Auto-Heal
 
-**Scenario:** 3 rows in the CSV export (7-day window), `--first-party-domain <your-domain> --min-users 100`.
+**Scenario:** 3 rows live-pulled from the Error Inspector Explorer (7-day window, `--frontend <your-frontend> --first-party-domain <your-domain> --min-users 100`).
 
-**Input CSV (relevant columns):**
+**Live-pulled rows (relevant fields):**
 
-| `error.id` | `❌ Error` | `👥 Users` | Top stack frame |
+| `error_id` | `error_text` | `users` | Top stack frame |
 |---|---|---|---|
 | ERR-A1 | Cannot read properties of undefined (reading 'push') | 250 | `<your-domain>/resources/chunk-cart.js:5:234` (`navigateToCart`) |
 | ERR-D4 | TypeError: Cannot read 'length' | 80 | `<your-domain>/resources/chunk-search.js:12:100` |
@@ -332,7 +328,7 @@ Additionally, in heal mode (Mode 3), a run is only complete when:
 - the run report is printed with the remediation rate vs the 75% target and an explicit verdict
 - every auto-fixed error has an MR URL (or a recorded `glab mr create` blocker) — MR coverage must be 100%
 - every eligible-but-unfixed error has a triage writeup in the registry
-- the registry is finalized and the CSV row count reconciles across auto-fixed / reported / skipped tables
+- the registry is finalized and the pulled row count reconciles across auto-fixed / reported / skipped tables
 
 **Post-merge verification is required to confirm impact reduction** — an
 `auto-fixed` status is a claim (tests + build passed locally) until

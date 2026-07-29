@@ -5,7 +5,7 @@ Persists the full fix lifecycle: error.id -> status -> branch -> MR -> verified
 resolution, plus per-run metrics against the 75% remediation target.
 
 usage:
-  registry.py init    <registry.json> --run-id ID --csv PATH --base-sha SHA --repo PATH [--min-users 100]
+  registry.py init    <registry.json> --run-id ID --source PATH --base-sha SHA --repo PATH [--min-users 100]
   registry.py update  <registry.json> --run-id ID --error-id EID --status S
                       [--error-text T] [--users N] [--branch B] [--branch-point-sha SHA]
                       [--mr-url U] [--confidence-source S] [--confidence-fix F]
@@ -13,14 +13,13 @@ usage:
   registry.py preflight <registry.json> --run-id ID --result "already-enabled|enabled-in-mr <url>|failed: ..."
   registry.py finalize <registry.json> --run-id ID
   registry.py report  <registry.json> --run-id ID
-  registry.py verify  <registry.json> --run-id ID --fresh-source PATH  (CSV or the canonical JSON row list; --fresh-csv also accepted)
+  registry.py verify  <registry.json> --run-id ID --fresh-source PATH  (canonical JSON row list from a fresh live-pull)
 
 Statuses:
   auto-fixed | auto-fixed-mr-pending | reported | skipped-3rd-party |
   skipped-below-threshold | resolved-verified | regressed-or-unmerged
 """
 import argparse
-import csv
 import json
 import os
 import re
@@ -103,7 +102,7 @@ def cmd_init(args):
         "run_id": args.run_id,
         "started_at": now(),
         "finished_at": None,
-        "csv_path": args.csv,
+        "source": args.source,
         "repo": args.repo,
         "base_sha": args.base_sha,
         "min_users": args.min_users,
@@ -213,7 +212,7 @@ def cmd_report(args):
     lines.append(f"# Auto-Heal Run Report — {run['run_id']}")
     lines.append("")
     lines.append(f"- **Repo:** {run['repo']}")
-    lines.append(f"- **CSV:** {run['csv_path']}")
+    lines.append(f"- **Source:** {run['source']}")
     lines.append(f"- **Base SHA:** {run['base_sha']}")
     lines.append(f"- **Started:** {run['started_at']}  **Finished:** {run.get('finished_at') or 'in progress'}")
     lines.append(f"- **Sourcemap preflight:** {run['preflight'].get('sourcemaps') or 'not run'}")
@@ -295,26 +294,18 @@ def cmd_report(args):
 
 
 def load_fresh_ids(path):
-    """Read the fresh pull's error ids — CSV (error.id column) or the
-    canonical JSON row list (error_id key), detected by file extension."""
+    """Read the fresh live-pull's error ids (canonical JSON row list, error_id key)."""
     p = Path(path)
-    if p.suffix.lower() == ".json":
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            print(f"malformed JSON in {p}: {exc}", file=sys.stderr)
-            raise SystemExit(1)
-        rows = data.get("rows", data) if isinstance(data, dict) else data
-        if not isinstance(rows, list):
-            print(f"'rows' in {p} must be a list, got {type(rows).__name__}", file=sys.stderr)
-            raise SystemExit(1)
-        return {str(r.get("error_id") or "").strip() for r in rows if r.get("error_id")}
-    with p.open(newline="", encoding="utf-8-sig") as handle:
-        return {
-            (row.get("error.id") or "").strip()
-            for row in csv.DictReader(handle)
-            if (row.get("error.id") or "").strip()
-        }
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"malformed JSON in {p}: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    rows = data.get("rows", data) if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        print(f"'rows' in {p} must be a list, got {type(rows).__name__}", file=sys.stderr)
+        raise SystemExit(1)
+    return {str(r.get("error_id") or "").strip() for r in rows if r.get("error_id")}
 
 
 def cmd_verify(args):
@@ -351,7 +342,7 @@ def main():
     p.add_argument("registry", nargs="?", default=None,
                     help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
-    p.add_argument("--csv", required=True)
+    p.add_argument("--source", required=True, help="path to the live-pull rows.json used for this run")
     p.add_argument("--base-sha", required=True)
     p.add_argument("--repo", required=True)
     p.add_argument("--min-users", type=int, default=100)
@@ -406,8 +397,8 @@ def main():
     p.add_argument("registry", nargs="?", default=None,
                     help="registry.json path (falls back to $REGISTRY_PATH/registry.json)")
     p.add_argument("--run-id", required=True)
-    p.add_argument("--fresh-source", "--fresh-csv", dest="fresh_source", required=True,
-                    help="CSV export or canonical JSON row list from the latest pull")
+    p.add_argument("--fresh-source", dest="fresh_source", required=True,
+                    help="canonical JSON row list from a fresh live-pull")
     p.set_defaults(fn=cmd_verify)
 
     args = ap.parse_args()

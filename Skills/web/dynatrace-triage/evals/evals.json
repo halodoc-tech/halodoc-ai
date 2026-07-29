@@ -5,21 +5,21 @@
     "confidence-based delivery decisions",
     "canonical MR body formatting",
     "smallest-correct-fix selection",
-    "auto-heal batch pipeline: live/CSV acquisition, hard 1st-party filtering, pre-fix visualization, no-approval fixes, MR-per-error, attribution registry"
+    "auto-heal batch pipeline: live dashboard acquisition, hard 1st-party filtering, pre-fix visualization, no-approval fixes, MR-per-error, attribution registry"
   ],
   "sample_prompts": [
     "use this skill to fix 0d2c159d985f24ef",
     "summarize the highest-risk recurring Dynatrace frontend errors",
     "investigate this Safari undefined-property crash and produce a reviewer-grade fix summary",
-    "heal ./errors.csv",
-    "run auto-heal on this Dynatrace export and show the remediation rate",
-    "batch fix this Dynatrace CSV against my-web-frontend",
-    "heal --source browser",
+    "auto-heal my-web-frontend against Dynatrace",
+    "run auto-heal on my-app-prod and show the remediation rate",
+    "batch fix Dynatrace errors for my-web-frontend",
+    "heal --frontend my-app-prod",
     "pull the latest browser exceptions from Dynatrace and auto-fix the high-impact ones"
   ],
   "heal_mode_expected_behavior": [
-    "before touching Dynatrace, resolves the data source: CSV path given, or asks token vs. browser if --source isn't specified — never silently defaults",
-    "no human approval prompt for eligible high-confidence fixes; only allowed stops are a dirty git tree and the Phase -1 source choice",
+    "before touching Dynatrace, resolves --frontend and --first-party-domain (asking if either isn't given) and confirms Chrome tenant access — there is no CSV or token alternative to choose between",
+    "no human approval prompt for eligible high-confidence fixes; only allowed stops are a dirty git tree and the Phase -1 acquisition setup",
     "1st-party is a HARD filter (extraction-time domain/vendor check, then evidence-stage stack check) — 3rd-party errors never enter the fix queue on a 'suspected' basis, but are still shown excluded on the visualization",
     "only errors with >=100 affected users AND confirmed 1st-party enter the fix queue, over a 7-day rolling window",
     "renders a pre-fix triage board (Artifact) showing every candidate's planned action before any code changes, plus excluded/skipped rows",

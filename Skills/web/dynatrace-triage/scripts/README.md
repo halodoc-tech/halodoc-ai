@@ -7,8 +7,9 @@ needed.
 ## Error handling conventions
 
 - **Malformed CSV/JSON input**: a clean one-line message on stderr + exit
-  code 1 — never a raw traceback. `eligibility.py --json` rejects invalid
-  JSON, and a `rows`/list shape that doesn't match the canonical schema.
+  code 1 — never a raw traceback. `parser.py` (Mode 1) rejects malformed CSV;
+  `eligibility.py` (Mode 3) rejects invalid JSON, and a `rows`/list shape
+  that doesn't match the canonical schema.
 - **Corrupted `registry.json`**: `registry.py` reports the parse error and
   exits 1 rather than silently starting from an empty registry (which would
   quietly lose prior attribution history).
@@ -38,13 +39,12 @@ Use the script when:
 
 ## eligibility.py (Mode 3)
 
-Filter a Dynatrace Error Inspector CSV — or a canonical JSON row list from a
-live browser/token pull — into an auto-heal work queue:
+Filter the canonical JSON row list produced by the browser-driven live-pull
+(`references/live-pull.md`) into an auto-heal work queue — this is the only
+input format Mode 3 accepts:
 
 ```bash
-python3 eligibility.py /path/to/errors.csv --min-users 100 --out queue.json
-# or, for live-pulled rows (see references/live-pull.md / token-pull.md):
-python3 eligibility.py --json /path/to/rows.json --min-users 100 --first-party-domain example.com --out queue.json
+python3 eligibility.py /path/to/rows.json --min-users 100 --first-party-domain example.com --out queue.json
 ```
 
 Emits eligible errors (confirmed 1st-party AND users >= threshold) sorted by
@@ -58,20 +58,19 @@ Rules: `references/eligibility.md`.
 Attribution registry — full fix lifecycle per error:
 
 ```bash
-python3 registry.py init      registry.json --run-id heal-2026-07-03-1 --csv errors.csv --base-sha <sha> --repo <path>
+python3 registry.py init      registry.json --run-id heal-2026-07-03-1 --source rows.json --base-sha <sha> --repo <path>
 python3 registry.py preflight registry.json --run-id heal-2026-07-03-1 --result already-enabled
 python3 registry.py update    registry.json --run-id heal-2026-07-03-1 --error-id <eid> --status auto-fixed \
     --branch fix/error-<eid>-<ctx> --branch-point-sha <sha> --mr-url <url> \
     --confidence-source high --confidence-fix high
 python3 registry.py finalize  registry.json --run-id heal-2026-07-03-1
 python3 registry.py report    registry.json --run-id heal-2026-07-03-1
-python3 registry.py verify    registry.json --run-id heal-2026-07-04-1 --fresh-source fresh.csv
+python3 registry.py verify    registry.json --run-id heal-2026-07-04-1 --fresh-source fresh-rows.json
 ```
 
-`--fresh-source` accepts either a CSV export or the canonical JSON row list
-(detected by file extension) — `--fresh-csv` is kept as a backward-compatible
-alias. The `registry.json` positional path can be omitted on every subcommand
-if `$REGISTRY_PATH` is set (recommended in CI, where `$HOME` is often
+`--fresh-source` is the canonical JSON row list from a fresh live-pull. The
+`registry.json` positional path can be omitted on every subcommand if
+`$REGISTRY_PATH` is set (recommended in CI, where `$HOME` is often
 ephemeral/per-job).
 
 Schema and status lifecycle: `references/registry-format.md`.

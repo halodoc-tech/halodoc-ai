@@ -3,23 +3,21 @@
 Acquires the eligible-error dataset directly from the Dynatrace Error
 Inspector Explorer UI via the `claude-in-chrome` tools, using the analyst's
 own authenticated browser session — no `DT_API_TOKEN` or new credentials
-required. This is one of the three acquisition paths chosen in Phase -1 of
-[auto-heal-workflow.md](./auto-heal-workflow.md) (the other two: `token-pull.md`,
-manual CSV).
+required. **This is the only acquisition path for Mode 3** — there is no
+CSV import and no DQL/token alternative; Mode 3 always pulls live from this
+dashboard.
 
 ## Contents
 
 - [When to use this path](#when-to-use-this-path)
 - [Procedure](#procedure)
 - [Explicitly out of scope for this path](#explicitly-out-of-scope-for-this-path)
-- [Future v2 note](#future-v2-note)
 
 ## When to use this path
 
-- No `DT_API_TOKEN` is configured, or the user prefers not to provision one
-  for this run.
-- A Chrome session with access to the tenant is available
-  (`mcp__claude-in-chrome__*` tools).
+Always — every Mode 3 run. A Chrome session with access to the Dynatrace
+tenant is required (`mcp__claude-in-chrome__*` tools); if none is available,
+tell the user Mode 3 cannot run without it (there is no fallback).
 
 ## Procedure
 
@@ -31,17 +29,22 @@ ToolSearch: select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome
 
 ### 2. Navigate to the Explorer
 
-URL template (adjust `Frontend`/tenant per target app):
+URL template (adjust the tenant and `Frontend` value per target app):
 
 ```
-https://<tenant>.apps.dynatrace.com/ui/apps/dynatrace.error.inspector/error-explorer?tf=now-7d%3Bnow&perspective=impact&sort=affected_users%3Adescending&sidebarOpen=true&tab=occurrence&group=occurrences#filtering=Frontend+%3D+<frontend-id>+%22Error+Type%22+%3D+Exception+
+https://<tenant>.apps.dynatrace.com/ui/apps/dynatrace.error.inspector/error-explorer?tf=now-7d%3Bnow&perspective=impact&sort=affected_users%3Adescending&sidebarOpen=true&expandedSections=instances%2Cpages%2Cdetails&tab=occurrence&group=occurrences#filtering=Frontend+%3D+<frontend-id>+%22Error+Type%22+%3D+Exception+
 ```
 
-- `tf=now-7d;now` — the 7-day rolling window (widened from 3 days).
+- `tf=now-7d;now` — the 7-day rolling window. **Always 7 days, never the
+  UI's own default (often `now-3d;now`)** — if a saved/shared link carries a
+  different `tf` value (e.g. `now-3d;now`), rewrite it to `now-7d;now`
+  before navigating.
 - `sort=affected_users:descending` — biggest impact first.
 - `filtering=Frontend = <frontend-id> "Error Type" = Exception` — scope to
   the target app's Exception errors only (never widen to Failed request /
-  CSP rule violation without being asked).
+  CSP rule violation without being asked). `<frontend-id>` is supplied by
+  the user or read from the skill's invocation (e.g. `my-app-prod`) —
+  never hardcode a single tenant's frontend as if it were universal.
 
 **Known quirk**: on a fresh tab, this URL sometimes lands on an app-switcher
 page showing only the left nav with an "Open Error Inspector" link — find and
@@ -94,7 +97,7 @@ For each extracted row, build a canonical JSON object matching
 Write the full list to a JSON file and run:
 
 ```bash
-python3 scripts/eligibility.py --json <rows.json> --min-users <n> --out <workspace>/queue-<run_id>.json
+python3 scripts/eligibility.py <rows.json> --min-users <n> --out <workspace>/queue-<run_id>.json
 ```
 
 ### 5. Per-candidate detail drill-down (evidence for Phase 2A)
@@ -111,13 +114,10 @@ gathered (never block the whole run on one row's UI quirk).
 
 ## Explicitly out of scope for this path
 
-- Any Dynatrace API/DQL calls — this path never touches `DT_API_TOKEN`.
+- Any Dynatrace API/DQL calls or `DT_API_TOKEN` — Mode 3 never uses them.
 - Errors outside the applied filter (Failed request, CSP rule violation) —
   do not switch these on to "see more data"; if the user wants a different
   Error Type scope, that's a separate, explicit run.
-
-## Future v2 note
-
-A non-interactive variant (no live browser session, e.g. for a CI trigger)
-would need [token-pull.md](./token-pull.md)'s DQL path instead — out of scope
-for this round.
+- A non-interactive/CI trigger (no live browser session) — Mode 3 requires
+  an interactive Claude Code session with Chrome access; there is no
+  headless equivalent.

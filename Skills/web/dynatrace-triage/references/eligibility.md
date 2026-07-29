@@ -14,11 +14,9 @@ Rules that scope Mode 3 (auto-heal) to 1st-party EXCEPTION errors impacting
 
 ## Scope assumptions
 
-Rows can come from any of the three acquisition paths — see
-[live-pull.md](./live-pull.md) (browser), [token-pull.md](./token-pull.md)
-(DQL), or a manually-exported CSV (fallback) — chosen in Phase -1 of
-[auto-heal-workflow.md](./auto-heal-workflow.md). Whichever path is used, it
-must already be scoped to:
+Rows always come from the single acquisition path — the browser-driven live
+pull of the Dynatrace Error Inspector Explorer, see
+[live-pull.md](./live-pull.md). That pull must already be scoped to:
 
 - Frontend = your target production app (e.g. `<your-app-id>` as named in Dynatrace)
 - Error Type = Exception
@@ -82,9 +80,9 @@ Rule: **eligible only if the topmost app-actionable frame is 1st-party.**
 
 ## Users threshold
 
-- Canonical field: `users` (from CSV column `👥 Users`, or the JSON row key
-  `users` from a live/token pull). Values may be quoted with thousands
-  separators (`"4,120"`), stray spaces, or non-breaking spaces.
+- Canonical field: `users` (the JSON row key from the live pull). Values may
+  be quoted with thousands separators (`"4,120"`), stray spaces, or
+  non-breaking spaces.
 - Rule: strip every non-digit character, parse int.
 - Fail-closed: unparseable → `0` → `skipped-below-threshold`, with a parse
   warning recorded on the entry (never guess a number).
@@ -92,12 +90,11 @@ Rule: **eligible only if the topmost app-actionable frame is 1st-party.**
 
 ## Canonical row schema
 
-Regardless of source, `eligibility.py` classifies a normalized row with keys
-`error_id, error_text, severity, signal, users, count, teams, top_pages,
-browsers`. The CSV path derives these from the emoji-prefixed export columns;
-the live-pull and token-pull paths must emit a JSON list (or `{"rows": [...]}`)
-of objects with exactly these keys — see the acquisition docs for how each
-source maps its raw data into this shape.
+`eligibility.py` classifies a normalized row with keys `error_id, error_text,
+severity, signal, users, count, teams, top_pages, browsers`. The live-pull
+must emit a JSON list (or `{"rows": [...]}`) of objects with exactly these
+keys — see [live-pull.md](./live-pull.md) for how it maps the Explorer's raw
+row data into this shape.
 
 ## Status taxonomy
 
