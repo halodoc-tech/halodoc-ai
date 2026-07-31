@@ -107,7 +107,9 @@ We welcome contributions — new skills, prompt improvements, bug fixes, and doc
 1. Fork this repository
 2. Create your skill under `skills/<domain>/<your-skill-name>/`
 3. Include both `SKILL.md` and `README.md` (use [`docs/skill-template/`](docs/skill-template/) as a starting point)
-4. Add at least one eval fixture under `evals/<domain>/`
+4. Eval fixtures under `evals/<domain>/` are encouraged but not yet required — the eval harness
+   itself hasn't landed in this repo. This will become a hard requirement once it does; until then,
+   a worked example inside the skill's own `SKILL.md` (input → expected output) is a good substitute
 5. Open a pull request using the `New Skill` PR template
 
 ### Improving an existing skill

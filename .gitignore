@@ -13,3 +13,6 @@ Skills/data/de-automation-tools/registry/*.yml
 sa_google.json
 sa_*.json
 *-sa.json
+
+# Filled-in team convention files must never be committed publicly
+Skills/**/references/team-conventions.local.md

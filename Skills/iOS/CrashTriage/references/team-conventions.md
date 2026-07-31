@@ -12,6 +12,20 @@
 #   - Add your name + date when adding a pattern so others know who to ask
 # ─────────────────────────────────────────────────────────────
 
+> ⚠️ **This file will contain internal information — owner names, chat handles, wiki links,
+> dashboard URLs.** Keep it in your own private repo. Never commit a filled-in copy back to a
+> public repository or upstream fork. If you contribute improvements to this skill, submit the
+> placeholder template only.
+
+## Contents
+- [§ Coding Conventions](#-coding-conventions) — architecture, naming, logging, SwiftLint
+- [§ Module Owners](#-module-owners) — who to assign each crash to
+- [§ Issue Tracker Config](#-issue-tracker-config) — tracker, project key, priority definitions
+- [§ Known Recurring Crashes](#-known-recurring-crashes) — patterns seen more than once
+- [§ Team Debugging Checklist](#-team-debugging-checklist) — run before escalating
+- [§ Do Not Rules](#-do-not-rules) — fixes that have caused problems before
+- [§ References](#-references) — architecture guide, SwiftLint config, dashboards
+
 ---
 
 ## § Coding Conventions
@@ -42,7 +56,7 @@ Logger.log("Message here", level: .error)   // levels: debug, info, warning, err
 ---
 
 ## § Module Owners
-# When suggesting a fix or creating a ticket, assign to the module owner.
+# When suggesting a fix or creating a ticket draft, assign to the module owner.
 # Format: Module — Owner — Slack/Teams handle
 
 | Module | Owner | Contact |

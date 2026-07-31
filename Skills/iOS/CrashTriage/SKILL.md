@@ -1,11 +1,14 @@
 ---
 name: ios-crash-triage
-description: Use this skill whenever a developer needs to analyze, diagnose, or fix an iOS crash. Triggers include: pasting a stack trace, sharing a Firebase Crashlytics report, uploading an Xcode .ips crash log, mentioning a crash type (EXC_BAD_ACCESS, nil unwrap, retain cycle, OOM), or asking "why is the app crashing". Also use when the developer says "triage this crash", "help me fix this crash", "what's causing this", or uploads any crash-related file. Produces full crash triage: root cause analysis + Swift fix following your project's conventions + issue-tracker ticket draft. Always use this skill proactively — don't just summarize the crash, go all the way to a fix.
+description: Triages iOS crashes end to end — parses Firebase Crashlytics reports, Xcode .ips logs, or raw stack traces; classifies the crash (force unwrap, array bounds, dangling pointer, race condition, stack overflow, assertion, main-thread violation, OOM); locates the root cause in the project's own source; proposes a Swift fix following the team's documented conventions; and produces a ticket draft for the team's issue tracker. Use when a developer pastes or uploads an iOS crash artifact, names an iOS crash signal (EXC_BAD_ACCESS, EXC_BAD_INSTRUCTION, SIGABRT, SIGSEGV, "unexpectedly found nil", OOM), or asks "why is the iOS app crashing", "triage this crash", "fix this crash", "analyse this Crashlytics issue". Does not cover Android, React Native, or Flutter crashes, backend errors, or non-crash defects such as UI glitches, hangs, or slow performance.
 ---
 
 # iOS Crash Triage
 
-Full pipeline: **parse input → classify crash → root cause → fix → issue ticket**
+Full pipeline: **parse input → classify crash → root cause → fix → ticket draft**
+
+**Completion bar:** a triage is not done at "here's what the exception means."
+It is done when Steps 1–5 have all produced output, including a concrete fix and a ticket draft.
 
 > Before triaging, always read `references/team-conventions.md`.
 > It contains your team's module owners, known recurring crashes,
@@ -16,6 +19,15 @@ Full pipeline: **parse input → classify crash → root cause → fix → issue
 > `references/team-conventions.md` with your own team's information
 > (see Setup in `README.md`). The workflow below is project-agnostic —
 > only the reference file needs customizing.
+>
+> **If `references/team-conventions.md` is missing:** proceed, but prefix the output with
+> `⚠️ No team conventions found — using Swift defaults. Fill in references/team-conventions.md for project-specific fixes.`
+>
+> **If a section still contains `[Add …]` placeholders:** that section is unconfigured.
+> Do not invent a value. For unconfigured logging, use the project's existing logging call
+> (grep the crashing file for `os_log`, `Logger`, `print`, or a custom logger) and fall back to
+> `// TODO: replace with your project's logger` if none is found. Apply the same rule to
+> navigation, error-state, and analytics calls — mirror what the surrounding code already does.
 
 ---
 
@@ -24,9 +36,14 @@ Full pipeline: **parse input → classify crash → root cause → fix → issue
 | What the dev provided | Action |
 |---|---|
 | Firebase Crashlytics report (JSON / pasted text) | Parse per § Firebase Parsing |
+| Firebase issue ID / Crashlytics URL, Firebase MCP server connected | Fetch directly — see § Direct Crashlytics Access |
 | Xcode crash log / `.ips` file | Parse per § Xcode Parsing |
 | Raw stack trace pasted in chat | Extract frames directly |
 | Crash type only, no trace | Ask the 4 questions in § Symptom Only |
+
+**Multiple crashes in one input?** Triage each one fully and separately (repeat Steps 1–4 per
+crash) rather than merging them into a single analysis — different crashes rarely share a root
+cause even if they look similar.
 
 ---
 
@@ -44,10 +61,23 @@ Look for these fields in order:
 If you see these, tell the developer:
 ```
 Frames are unsymbolicated — file/line info is missing.
-Ask the team to upload dSYMs:
+Ask the team to upload dSYMs (requires the Firebase CLI: npm install -g firebase-tools):
   firebase crashlytics:symbols:upload --app=<APP_ID> <PATH_TO_DSYM>
-Check if the CI/CD pipeline uploads dSYMs post-archive step.
+Check whether the CI/CD pipeline uploads dSYMs in its post-archive step.
 ```
+
+---
+
+## § Direct Crashlytics Access
+
+If a Firebase-related MCP server is connected, first check what it actually exposes — tool names
+vary by implementation and are not standardized:
+- Use `ToolSearch` (or your harness's tool-discovery mechanism) with a query like "crashlytics" or
+  "crash issue" to find an issue-fetching tool.
+- If a matching tool is found, use its fully-qualified `ServerName:tool_name` form to fetch the
+  issue instead of asking for a paste.
+- If no matching tool exists, or the call fails for any reason, fall back to asking the developer
+  to paste the report — never block on it or retry a tool name that doesn't exist.
 
 ---
 
@@ -94,6 +124,38 @@ Then match to the closest crash class in Step 2.
 | `UI API called on background thread` | → § Main Thread Violation |
 | No stack trace, OOM label in Firebase | → § OOM |
 | `SIGABRT` + Swift runtime message | → Check for assertion or KVO misuse |
+| `0x8badf00d` / watchdog / `SIGKILL` | → § Watchdog Termination (main thread blocked > 20s — find the sync I/O or blocking lock on main) |
+| Crash inside a third-party framework, no app frames | → Report the framework, its version, and the call your app makes into it. Do not propose changes to vendor code. |
+
+**No row matches?** Do not force-fit a class. Output `Crash Class: unclassified`, state the exception
+type and subtype verbatim, list the top 5 frames, and give the developer the two most likely
+hypotheses with what evidence would confirm each. An honest "unclassified" beats a wrong class.
+
+---
+
+## Step 2.5 — Ground the Fix in Real Source (mandatory)
+
+Before proposing any fix, locate and read the actual code:
+
+1. Take the first app frame from Step 1 (e.g. `ConsultationViewModel.loadDoctor`).
+2. Find the file: `Glob` for `**/<TypeName>.swift`; if that misses, `Grep` for `func <methodName>`.
+   If more than one file matches, prefer the one whose path matches the module named in the crash
+   frame (e.g. a frame from `PaymentKit` → the `.swift` file under `Sources/PaymentKit/` or
+   `Modules/Payment/`); if still ambiguous, list the candidates and ask.
+3. Read the crashing function plus its callers (`Grep` for `<methodName>(`).
+4. Confirm the crash class from Step 2 against what the code actually does.
+5. Check the deployment target and Swift version in `references/team-conventions.md` (or the
+   `.xcodeproj` / `Package.swift`). Do not propose API newer than the target supports —
+   `guard let self else` needs Swift 5.7+, `actor` and `@MainActor` need Swift 5.5+.
+6. **If the source contradicts the Step 2 classification** (e.g. the "crashing" line is a guarded
+   optional, not a force unwrap), stop and re-classify: return to Step 2 with what the code actually
+   shows, state that the signal-based classification was provisional, and note the corrected class
+   before continuing to Step 3.
+
+**If the file cannot be found** (source not in the workspace, or unsymbolicated frames),
+say so explicitly and label the output:
+`⚠️ Pattern-based analysis — source not available. Fix is illustrative, not verified against your code.`
+Never emit a `File:` / `Line:` value you have not read.
 
 ---
 
@@ -128,9 +190,15 @@ guard let data = response.data, let doctorId = data.doctorId else {
 let item = items[indexPath.row]
 
 // ✅ After
-guard indexPath.row < items.count else { return UITableViewCell() }
+guard indexPath.row < items.count else {
+    Logger.log("Index \(indexPath.row) out of bounds (count: \(items.count)) in \(#function)", level: .error)
+    return UITableViewCell()
+}
 let item = items[indexPath.row]
 ```
+
+The guard prevents the crash; it does not fix the cause. Always also find why the count diverged —
+mutation off the main thread, or a reload racing pagination.
 
 Also verify the array isn't mutated off main thread — wrap mutations in `DispatchQueue.main.async`.
 
@@ -162,17 +230,22 @@ viewModel.onDataLoaded = { [weak self] data in
 **Root cause:** Shared mutable state read/written from multiple threads simultaneously.
 
 ```swift
-// ✅ Fix — serial dispatch queue
+// ✅ Preferred (Swift 5.5+) — actor isolation, checked by the compiler
+actor ItemStore {
+    private var items: [Item] = []
+    func append(_ item: Item) { items.append(item) }
+    func all() -> [Item] { items }
+}
+
+// ✅ Legacy fallback — only if the file is not yet async/await-capable
 private let queue = DispatchQueue(label: "com.yourcompany.app.<feature>.queue")
 private var _items: [Item] = []
-
-func append(_ item: Item) {
-    queue.async { self._items.append(item) }
-}
-func getItems() -> [Item] {
-    queue.sync { _items }
-}
+func append(_ item: Item) { queue.async { self._items.append(item) } }
+func getItems() -> [Item] { queue.sync { _items } }
 ```
+
+Match the surrounding file. If it already uses async/await, use the actor form; if it's
+completion-handler based, use the GCD form rather than mixing paradigms in one file.
 
 ---
 
@@ -224,13 +297,21 @@ Read the assertion message literally — it tells you exactly what invariant was
 **Root cause:** UIKit/SwiftUI API called from a background thread (network callback, Combine operator, etc).
 
 ```swift
-// ✅ Fix
+// ✅ Preferred — compiler-enforced main-thread isolation
+@MainActor
+func refresh() async {
+    let data = await viewModel.fetchData()
+    tableView.reloadData()
+}
+
+// ✅ Legacy fallback for completion-handler APIs
 viewModel.fetchData { [weak self] data in
-    DispatchQueue.main.async {
-        self?.tableView.reloadData()
-    }
+    DispatchQueue.main.async { self?.tableView.reloadData() }
 }
 ```
+
+Match the surrounding file. If it already uses async/await, use the `@MainActor` form; if it's
+completion-handler based, use the GCD form rather than mixing paradigms in one file.
 
 Enable **Main Thread Checker** in Xcode → Edit Scheme → Diagnostics → Runtime API Checking.
 
@@ -262,7 +343,15 @@ Use **Instruments → Leaks + Allocations** to find retained objects. Run Memory
 
 ## Step 4 — Produce Output
 
-Always output in this structure. Never skip a section.
+**This skill proposes; it does not apply.** Output the fix as a diff in chat. Do not edit source
+files, create branches, or file tickets unless the developer explicitly asks ("apply the fix",
+"make the change"). After presenting the output, offer: "Want me to apply this fix?"
+
+Always output all five sections in this order (Root Cause, Crash Class, Suggested Fix, How to
+Verify, Ticket Draft — the redaction step below runs between the last two). When a section cannot
+be completed from available evidence, emit the header and state what is blocking it — e.g.
+`**File:** unknown — frames unsymbolicated, dSYM upload required`. Never fill a section with a guess
+to avoid leaving it empty.
 
 ---
 
@@ -284,9 +373,30 @@ Always output in this structure. Never skip a section.
 **Why this fixes it:** [1–2 sentences.]
 
 ### 🧪 How to Verify
-[How to reproduce locally or confirm the fix. E.g.: "Run the doctor booking flow with a nil appointmentId and verify no crash occurs. Enable Zombie Objects in Scheme diagnostics."]
 
-### 🎫 Issue Ticket
+**1. Compile first.** Before reporting the fix as ready:
+- `xcodebuild -scheme <Scheme> -destination 'generic/platform=iOS Simulator' build` (or `tuist build`)
+- `swiftlint lint --path <ChangedFile>.swift` if a `.swiftlint.yml` exists
+If either fails, fix and re-run before presenting. Never present unverified code as a fix.
+
+**2. Then reproduce.** [How to reproduce locally or confirm the fix. E.g.: "Run the doctor booking flow with a nil appointmentId and verify no crash occurs. Enable Zombie Objects in Scheme diagnostics."]
+
+### 🔒 Before the Ticket Draft — Redact
+
+**Redact before writing the ticket draft.** Crash artifacts often carry personal data. Replace, in every
+quoted log line, URL, and custom key/value:
+
+| Found | Replace with |
+|---|---|
+| Email addresses, phone numbers | `<redacted-pii>` |
+| User IDs, session IDs, auth tokens, deeplink query values | `<redacted-id>` |
+| Device UUID / IDFV / IDFA | `<redacted-device-id>` |
+| Patient, order, or transaction identifiers | `<redacted-record-id>` |
+
+Keep exception type, signal, frames, file names, line numbers, OS and device *model* — these carry
+no personal data and are what the fix depends on.
+
+### 🎫 Ticket Draft
 
 > Formatted for JIRA below — adjust field names for your team's tracker (Linear, GitHub Issues, etc.). See `references/team-conventions.md` for your project's priority definitions and custom fields.
 
@@ -333,6 +443,19 @@ App crashes: [exception type + message]
 
 ---
 
+## Out of Scope
+
+This skill does NOT:
+- Triage Android, React Native, or Flutter crashes — those need their own platform skill
+- Symbolicate crash logs (request a dSYM upload instead) or upload dSYMs
+- File tickets — it produces the ticket draft only
+- Handle non-crash defects: UI glitches, hangs without a crash, slow performance, layout bugs
+- Configure Crashlytics alerting thresholds or monitoring
+
+If the input is not an iOS crash, say so and stop rather than adapting the workflow.
+
+---
+
 ## Quick Reference
 
 | Exception | Most Likely Cause | First Thing to Check |
@@ -345,3 +468,9 @@ App crashes: [exception type + message]
 | OOM / no trace | Memory exhaustion | Instruments Leaks + image sizes |
 | Deep recursive frames | Stack overflow | Coordinator loops, `didSet` cycles |
 | `UI API on background thread` | Main thread violation | Wrap in `DispatchQueue.main.async` |
+
+---
+
+## Worked Example
+
+See `references/worked-example.md` for a full input → Step 4 output run.

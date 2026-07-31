@@ -3,7 +3,7 @@
 A Claude Code skill that takes a raw iOS crash — a Firebase Crashlytics
 report, an Xcode `.ips` file, a pasted stack trace, or just a symptom
 description — all the way through to a root cause analysis, a Swift fix that
-follows your project's conventions, and an issue-tracker ticket draft. No
+follows your project's conventions, and a ticket draft for your issue tracker. No
 manual frame-reading or crash-log archaeology required.
 
 ---
@@ -30,7 +30,8 @@ your-project/
         └── ios-crash-triage/
             ├── SKILL.md
             └── references/
-                └── team-conventions.md
+                ├── team-conventions.md
+                └── worked-example.md
 ```
 
 **2. Populate `references/team-conventions.md`**
@@ -81,7 +82,7 @@ For every crash, in order:
 2. **Crash Class** — one of: nil/force-unwrap, array bounds, dangling pointer, race condition, stack overflow, assertion, main-thread violation, OOM
 3. **Suggested Fix** — before/after Swift code
 4. **How to Verify** — steps to reproduce and confirm the fix
-5. **Issue Ticket** — a ready-to-paste ticket body, formatted for JIRA by default (adjust field names for your tracker)
+5. **Ticket Draft** — ready-to-paste ticket content, formatted for JIRA by default (adjust field names for your tracker)
 
 ---
 
@@ -92,7 +93,7 @@ For every crash, in order:
 | Your architecture rules (MVVM/VIPER/TCA specifics) | `references/team-conventions.md` |
 | dSYM upload automation | Your CI/CD pipeline |
 | Crash monitoring / alerting thresholds | Your Firebase Crashlytics / observability setup |
-| Ticket creation (actually filing it) | Your issue tracker's CLI/API — this skill only drafts the content |
+| Ticket creation (actually filing it) | Your issue tracker's CLI/API — this skill only produces the ticket draft |
 
 ---
 
