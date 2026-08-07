@@ -21,7 +21,7 @@
     "before touching Dynatrace, resolves --frontend and --first-party-domain (asking if either isn't given) and confirms Chrome tenant access — there is no CSV or token alternative to choose between",
     "no human approval prompt for eligible high-confidence fixes; only allowed stops are a dirty git tree and the Phase -1 acquisition setup",
     "1st-party is a HARD filter (extraction-time domain/vendor check, then evidence-stage stack check) — 3rd-party errors never enter the fix queue on a 'suspected' basis, but are still shown excluded on the visualization",
-    "only errors with >=100 affected users AND confirmed 1st-party enter the fix queue, over a 7-day rolling window",
+    "only errors with >=100 affected users AND confirmed 1st-party enter the fix queue, over a 3-day rolling window",
     "renders a pre-fix triage board (Artifact) showing every candidate's planned action before any code changes, plus excluded/skipped rows",
     "each fix branch is cut from freshly fetched origin/master (verified via merge-base) and produces exactly one MR",
     "test gate before every MR: reproducing spec + eslint + targeted ChromeHeadlessCI run; retry once then downgrade to reported",

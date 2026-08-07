@@ -32,13 +32,12 @@ ToolSearch: select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome
 URL template (adjust the tenant and `Frontend` value per target app):
 
 ```
-https://<tenant>.apps.dynatrace.com/ui/apps/dynatrace.error.inspector/error-explorer?tf=now-7d%3Bnow&perspective=impact&sort=affected_users%3Adescending&sidebarOpen=true&expandedSections=instances%2Cpages%2Cdetails&tab=occurrence&group=occurrences#filtering=Frontend+%3D+<frontend-id>+%22Error+Type%22+%3D+Exception+
+https://<tenant>.apps.dynatrace.com/ui/apps/dynatrace.error.inspector/error-explorer?tf=now-3d%3Bnow&perspective=impact&sort=affected_users%3Adescending&sidebarOpen=true&expandedSections=instances%2Cpages%2Cdetails&tab=occurrence&group=occurrences#filtering=Frontend+%3D+<frontend-id>+%22Error+Type%22+%3D+Exception+
 ```
 
-- `tf=now-7d;now` — the 7-day rolling window. **Always 7 days, never the
-  UI's own default (often `now-3d;now`)** — if a saved/shared link carries a
-  different `tf` value (e.g. `now-3d;now`), rewrite it to `now-7d;now`
-  before navigating.
+- `tf=now-3d;now` — the 3-day rolling window. **Always 3 days** — if a
+  saved/shared link carries a different `tf` value (e.g. `now-7d;now`),
+  rewrite it to `now-3d;now` before navigating.
 - `sort=affected_users:descending` — biggest impact first.
 - `filtering=Frontend = <frontend-id> "Error Type" = Exception` — scope to
   the target app's Exception errors only (never widen to Failed request /

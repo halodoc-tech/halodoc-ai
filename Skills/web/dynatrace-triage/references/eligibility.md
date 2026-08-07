@@ -10,7 +10,7 @@
 - [Ordering](#ordering)
 
 Rules that scope Mode 3 (auto-heal) to 1st-party EXCEPTION errors impacting
-≥100 users within a rolling 7-day window.
+≥100 users within a rolling 3-day window.
 
 ## Scope assumptions
 
@@ -20,7 +20,7 @@ pull of the Dynatrace Error Inspector Explorer, see
 
 - Frontend = your target production app (e.g. `<your-app-id>` as named in Dynatrace)
 - Error Type = Exception
-- Time frame = last 7 days (rolling)
+- Time frame = last 3 days (rolling)
 
 `eligibility.py` trusts the source for error type and time window (neither is
 carried per-row), and enforces locally what it can:

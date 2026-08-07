@@ -2,7 +2,7 @@
 name: dynatrace-triage
 version: "1.0.0"
 maintainer: "halodoc-ai"
-description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors. Operates in three modes — (1) single-error fix: trigger on "fix this Dynatrace error", "investigate this production error", or a specific error id; (2) strategic summary: trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes"; (3) auto-healing batch pipeline: trigger with "auto-heal", "batch fix Dynatrace errors", "remediate Dynatrace errors in batch" — live-pulls errors from the Dynatrace Error Inspector dashboard, hard-filters to 1st-party exceptions (>=100 users, 7-day window), shows a pre-fix plan, auto-fixes high-confidence errors with no approval, opens one Git MR per error. Scope: Dynatrace browser/client-side errors only — not backend 5xx/4xx, mobile crashes, or non-Dynatrace sources.
+description: Senior Frontend Architect skill for high-confidence Dynatrace error diagnosis and durable remediation on any Angular/JS web frontend. Provides deep root-cause analysis, architecture-first fixes, confidence scoring, and reviewer-grade PR/MR rationale for client-side production errors. Operates in three modes — (1) single-error fix: trigger on "fix this Dynatrace error", "investigate this production error", or a specific error id; (2) strategic summary: trigger on "summarize our recurring Dynatrace errors", "rank our worst frontend crashes"; (3) auto-healing batch pipeline: trigger with "auto-heal", "batch fix Dynatrace errors", "remediate Dynatrace errors in batch" — live-pulls errors from the Dynatrace Error Inspector dashboard, hard-filters to 1st-party exceptions (>=100 users, 3-day window), shows a pre-fix plan, auto-fixes high-confidence errors with no approval, opens one Git MR per error. Scope: Dynatrace browser/client-side errors only — not backend 5xx/4xx, mobile crashes, or non-Dynatrace sources.
 compatibility: Claude Code only — requires direct repo filesystem access and bash tools
 ---
 
@@ -266,7 +266,7 @@ Then:
    path to choose between; Mode 3 always live-pulls via
    [live-pull.md](./references/live-pull.md).
 2. Run Phase 0 preconditions: verify Python 3 is available (`python3 --version`; if not found, tell the user "Python 3 is required but not installed — install it or run in an environment where it's available" and stop), clean tree, latest master, sourcemap preflight, registry init.
-3. Pull errors via the chosen path (7-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row. **If the queue is empty after filtering** (every row was 3rd-party or below the users threshold), print "No eligible errors found — 0 errors passed the 1st-party filter and min-users threshold. Nothing to fix." and exit cleanly — do not create registry entries beyond the `init` record, do not render the visualization, and do not proceed to Phase 2A/2B.
+3. Pull errors via the chosen path (3-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row. **If the queue is empty after filtering** (every row was 3rd-party or below the users threshold), print "No eligible errors found — 0 errors passed the 1st-party filter and min-users threshold. Nothing to fix." and exit cleanly — do not create registry entries beyond the `init` record, do not render the visualization, and do not proceed to Phase 2A/2B.
 4. **Phase 2A**: diagnose every eligible error (evidence, confidence, planned action) with no side effects yet.
 5. **Visualize**: render the pre-fix triage board (Artifact) showing every candidate's plan, plus excluded/skipped rows for audit. **"Last chance to review" means Claude's own sanity-check pass, not a wait-for-human-confirmation step** — inspect the board, sanity-check the confidence scores and planned actions against the evidence gathered in Phase 2A, then proceed directly to Phase 2B without pausing for a human "go ahead." (Because this runs inside an interactive Claude Code session, the human watching can still interrupt at any point — that's ambient oversight, not a formal gate the workflow waits on.) Use `--dry-run` to stop here without executing anything — that is the only flag that halts the pipeline at this point.
 6. **Phase 2B**: execute the planned actions — confidence gate replaces the human approval prompt; low confidence → report-only; high/medium-with-assumptions → branch/fix/test/MR.
@@ -275,7 +275,7 @@ Then:
 
 ## Worked Example — Mode 3 Auto-Heal
 
-**Scenario:** 3 rows live-pulled from the Error Inspector Explorer (7-day window, `--frontend <your-frontend> --first-party-domain <your-domain> --min-users 100`).
+**Scenario:** 3 rows live-pulled from the Error Inspector Explorer (3-day window, `--frontend <your-frontend> --first-party-domain <your-domain> --min-users 100`).
 
 **Live-pulled rows (relevant fields):**
 

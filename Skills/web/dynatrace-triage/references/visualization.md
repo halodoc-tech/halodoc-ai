@@ -40,7 +40,7 @@ Two small lists, not full tables:
 
 ### Header summary
 
-Run id, source (live dashboard pull), time window (7 days), total rows seen,
+Run id, source (live dashboard pull), time window (3 days), total rows seen,
 counts per bucket (eligible / skipped-3rd-party / skipped-below-threshold),
 and a note: *"Planned actions below are not yet executed — this is a preview."*
 

@@ -81,8 +81,8 @@ Rules:
 
 ## Phase 1: Build the work queue
 
-Acquire rows via [live-pull.md](./live-pull.md), scoped to the **7-day
-rolling window** (`tf=now-7d;now` — always rewrite a shorter default if the
+Acquire rows via [live-pull.md](./live-pull.md), scoped to the **3-day
+rolling window** (`tf=now-3d;now` — always rewrite a different default if the
 dashboard URL carries one), then:
 
 ```bash
@@ -380,7 +380,7 @@ count actually dropped — run it proactively:
 1. **Wait for deployment.** Timing depends on your deploy pipeline —
    typically 15-60 minutes for a frontend release. Check the merged MR's
    pipeline/deploy status rather than guessing.
-2. **Re-pull Dynatrace** for the same window (7 days) via the same
+2. **Re-pull Dynatrace** for the same window (3 days) via the same
    [live-pull.md](./live-pull.md) procedure used originally.
 3. **Run verify**:
    ```bash
