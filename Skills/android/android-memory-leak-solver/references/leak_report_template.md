@@ -1,5 +1,8 @@
 # Android_mem_leaks.md template
 
+**Contents:** [Why this file exists](#why-this-file-exists) ·
+[Brief usage example](#brief-usage-example) · [Template](#template)
+
 ## Why this file exists
 
 Step 6 of `../SKILL.md` generates one `Android_mem_leaks.md` per run, covering every leak
@@ -44,10 +47,12 @@ illustrating how the placeholders get filled in.
 
 ---
 
+## Template
+
 ```markdown
 <!--
   document_type: Android Memory Leak Analysis
-  skill: android-memoryleak-solver
+  skill: android-memory-leak-solver
   next_step: This skill implements all fixes and raises pull/merge requests autonomously (Steps 8–9)
 -->
 

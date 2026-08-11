@@ -1,19 +1,19 @@
 ---
-name: android-memoryleak-solver
+name: android-memory-leak-solver
 description: >
   Android Memory Leak Analyser & Solver — ingests LeakCanary traces from issue-tracker
-  tickets, fetches tickets tagged as memory leaks from your project's board, or accepts
-  raw traces pasted in chat. Identifies the reference chain, user journey, root cause,
-  and reproduction steps. Generates a concise Android_mem_leaks.md covering all leaks.
-  Library leaks are flagged briefly; app leaks get full analysis, a fix, and pull/merge
-  requests via a single-branch version-bump workflow (build file + shared version
-  catalogue, a version-tracker branch, and a consumer-module cascade) — no hand-off.
-  ALWAYS use when the user says: "android memory leak", "memory leak tickets", "fix
-  memory leak", "leaktrace", "LeakCanary", "fetch android memory leaks", "analyse leak",
-  pastes a LeakCanary trace, shares an issue-tracker URL related to a memory leak, or
-  reports memory growth alongside a LeakCanary trace or ticket. Not for iOS, native C++,
-  or non-LeakCanary/general profiling issues. Self-contained: analyses, fixes, and raises
-  the pull/merge requests end to end.
+  tickets, fetches tickets tagged as memory leaks from the configured issue-tracker board,
+  or accepts raw traces pasted in chat. Identifies the reference chain, user journey, root
+  cause, and reproduction steps. Generates a concise Android_mem_leaks.md covering all
+  leaks. Library leaks are flagged briefly; app leaks get full analysis, a fix, and
+  pull/merge requests via a single-branch version-bump workflow (build file + shared
+  version catalogue, a version-tracker branch, and a consumer-module cascade) — no
+  hand-off. ALWAYS use when the user says: "android memory leak", "android memory leak
+  tickets", "fix android memory leak", "leaktrace", "LeakCanary", "fetch android memory
+  leaks", "analyse android leak", pastes a LeakCanary trace, shares an issue-tracker URL
+  related to a memory leak, or reports memory growth alongside a LeakCanary trace or
+  ticket. Not for iOS, native C++, or non-LeakCanary/general profiling issues.
+  Self-contained: analyses, fixes, and raises the pull/merge requests end to end.
 ---
 
 # Android Memory Leak Solver
@@ -64,7 +64,7 @@ is organization-specific; only these values are.
 | `{SHARED_VERSION_CATALOGUE}` | The single file consumers declare their dependency versions in (a Gradle version catalog, a `Versions.kt`/`Dependencies.kt` object, a BOM, etc.) | `buildSrc/.../Versions.kt` |
 | `{BASE_APP_MODULES}` | The application module(s) at the bottom of the dependency tree (never themselves consumed by anything else) | your main app module name(s) |
 | `{ORG_MODULE_CATALOG}` *(optional)* | A file mapping package prefixes → module name → git repo URL, if you maintain one | see "Organization-provided resources" below |
-| `{ORG_BRANCHING_WORKFLOW}` *(optional)* | A shared doc/script your org already has for branch/version-bump/PR mechanics, if one exists | see below |
+| `{ORG_BRANCHING_WORKFLOW}` *(optional)* | A shared doc/script your org already has for branch/version-bump/pull/merge-request mechanics, if one exists | see below |
 | `{ORG_CONSUMER_DETECTION}` *(optional)* | A script that finds every repo depending on a given module, if one exists | see below |
 | `{ORG_ENGINEERING_STANDARDS}` *(optional)* | Your org's coding-standards doc, if one exists | see below |
 
@@ -114,7 +114,7 @@ are required to run this skill; each has a documented inline fallback.
 | Resource | Purpose | If absent |
 |------|---------|--------------|
 | `{ORG_MODULE_CATALOG}` — a file mapping package-prefix → module name → git repo URL | Lets Step 4d/8a resolve which repo owns a given package without guessing | Derive the module/repo name by reasoning from the package name and your project configuration (Step 1); clone by convention (`{package-suffix}` → `{org-git-host}/{package-suffix}`) and confirm with the user's existing checkouts first |
-| `{ORG_BRANCHING_WORKFLOW}` — a shared doc/script for branch creation, version bumps, and PR raising, if your org already has one shared across multiple AI skills | Keeps this skill consistent with whatever else in your org already automates branching/versioning | Follow the inline branching mechanics spelled out directly in Step 9 of this skill — they are a complete, self-sufficient version of the same contract |
+| `{ORG_BRANCHING_WORKFLOW}` — a shared doc/script for branch creation, version bumps, and pull/merge-request raising, if your org already has one shared across multiple AI skills | Keeps this skill consistent with whatever else in your org already automates branching/versioning | Follow the inline branching mechanics spelled out directly in Step 9 of this skill — they are a complete, self-sufficient version of the same contract |
 | `{ORG_CONSUMER_DETECTION}` — a script that finds every repo depending on a given module | Speeds up Step 8b's consumer-module search | Do the equivalent search yourself: grep every known repo's dependency declarations (Gradle files, version catalogs) for the primary module's artifact coordinate |
 | `{ORG_ENGINEERING_STANDARDS}` — your org's coding-standards doc | Keeps the generated fix idiomatic for your codebase | Fall back to general good practice for the language (Kotlin: coroutines over raw `Handler`/threads, safe calls over `!!`, immutable state where practical) |
 
@@ -132,9 +132,11 @@ If you maintain `{ORG_MODULE_CATALOG}`, load it too — it maps every known pack
 its owning module, domain, and git repo URL. It is static, bundled reference data; don't
 search for a different copy of it at runtime.
 
-If no project configuration can be found at all, stop and tell the user what's missing —
-you need at minimum a workspace root path and a way to discover which repos are already
-cloned.
+If no project configuration can be found at all, emit:
+```
+❌ FATAL: No project configuration found — need at minimum a workspace root path and a way
+         to discover which repos are already cloned. Tell the user what's missing and stop.
+```
 
 **Fail-fast auth check:** whatever raises the pull/merge request in Step 9b will itself
 verify the git host CLI is authenticated, but that happens only after Steps 1–8's analysis
@@ -166,7 +168,7 @@ Decide which mode applies based on what the user provided:
 | **Tracker tickets** | User pastes one or more issue-tracker URLs (e.g. a Jira `/browse/{ISSUE_TRACKER_PROJECT_KEY}-xxxx` link) | Fetch each ticket → extract the leak trace from its description |
 | **Fetch all** | User says "fetch all memory leaks", "fetch android memory leak tickets", or similar | Query the tracker for all open tickets tagged `{LEAK_TICKET_LABEL}` under `{ISSUE_TRACKER_PROJECT_KEY}` |
 | **Manual trace** | User pastes one or more raw LeakCanary trace blocks | Use provided text directly as leak input |
-| **Vague memory report, no trace** | User describes memory growth with no trace/ticket (e.g. "the app feels slow after a while") | Reply: "I need a LeakCanary trace or a `{LEAK_TICKET_LABEL}` ticket to analyse this — general performance profiling without a trace is out of scope for this skill." Do not proceed. |
+| **Vague memory report, no trace** | User describes memory growth with no trace/ticket (e.g. "the app feels slow after a while") | Emit `❌ FATAL: No LeakCanary trace or {LEAK_TICKET_LABEL} ticket provided — general performance profiling without a trace is out of scope for this skill.` and do not proceed. |
 
 For the Tracker tickets and Fetch all modes, use whatever issue-tracker access is available
 in your environment.
@@ -379,6 +381,10 @@ Examples:
 
 ## Step 6 — Generate Android_mem_leaks.md
 
+**Resolve the date first** — run `DATE=$(date +%Y%m%d)` (or your environment's equivalent)
+and use that value everywhere `{YYYYMMDD}` appears below. Never infer today's date from
+memory or context; it must come from the system clock.
+
 Save to:
 ```
 {workspace_root}/tcd_workspace/android-mem-leaks-{YYYYMMDD}/Android_mem_leaks.md
@@ -425,11 +431,11 @@ race on local git state before either push ever reaches the tracker. Guard again
 narrower case only:
 
 ```bash
-LOCK_FILE="{workspace_root}/.android-memoryleak-solver.lock"
+LOCK_FILE="{workspace_root}/.android-memory-leak-solver.lock"
 if [ -f "$LOCK_FILE" ]; then
   LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0) ))
   if [ "$LOCK_AGE" -lt 3600 ]; then
-    echo "❌ FATAL: Another android-memoryleak-solver run appears in progress in this workspace
+    echo "❌ FATAL: Another android-memory-leak-solver run appears in progress in this workspace
              (lock age: ${LOCK_AGE}s). Wait for it to finish, or remove $LOCK_FILE if it crashed."
     exit 1
   fi
@@ -442,7 +448,7 @@ echo "$$" > "$LOCK_FILE"
 registered in one would fire the instant that single command finishes, not when the whole
 run (Steps 8–9, many separate commands) actually ends. Instead, remove `$LOCK_FILE`
 explicitly at every point the run can end after this point:
-- On success: as the last action of Step 9c, `rm -f "{workspace_root}/.android-memoryleak-solver.lock"`.
+- On success: as the last action of Step 9c, `rm -f "{workspace_root}/.android-memory-leak-solver.lock"`.
 - On any `❌ FATAL:` stop reached after this step (Step 8a's null-repo guard, Step 9a's build-failure
   abort, Step 9b's version-authority or mid-cascade FATALs): run the same `rm -f` immediately before
   that stop, so a failed run doesn't leave a stale lock blocking the next one for up to an hour.
@@ -461,9 +467,9 @@ For `manual` traces with no ticket, use `memory_leak-manual-{YYYYMMDD}`.
 
 For each app leak, the affected module and repo were already identified in Step 4d. From
 your project configuration (match the first-party package to a module entry) record:
-- `{primary_module}` — the Gradle module key (e.g. `teleconsultation`)
+- `{primary_module}` — the Gradle module key (e.g. `payments`)
 - `{repo_name}` — the repo directory under `{workspace_root}`
-- `{namespace}` — the module namespace (e.g. `{FIRST_PARTY_PACKAGE_PREFIXES}teleconsultation`)
+- `{namespace}` — the module namespace (e.g. `{FIRST_PARTY_PACKAGE_PREFIXES}payments`)
 - `{test_command}` / `{build_command}` — from the module entry
 
 **Null repo guard — check before proceeding:**
@@ -490,9 +496,9 @@ If {repo_name} is null for this leak's module:
     can apply the fix manually, then emit:
     ❌ FATAL: Cannot locate or clone primary repo for '{primary_module}' — pull/merge-request
              creation aborted for this leak. Apply the fix manually using the Fix Approach above.
-    Skip this leak's module in Step 9 — never proceed with edits or PR creation against a
+    Skip this leak's module in Step 9 — never proceed with edits or pull/merge-request creation against a
     null repo path. If every app leak in this run resolves to a null repo, remove the Step 8.0
-    lock file (`rm -f "{workspace_root}/.android-memoryleak-solver.lock"`) and stop the entire
+    lock file (`rm -f "{workspace_root}/.android-memory-leak-solver.lock"`) and stop the entire
     run instead of invoking Step 9.
 ```
 
@@ -572,7 +578,7 @@ iteration order. Skip 8b entirely if `{primary_module}` is one of `{BASE_APP_MOD
 >    - **(b) and (c) are MANDATORY even when the consumer has no code changes** — its downstream consumers must still resolve the updated dependency chain.
 >
 > 6. **`{VERSION_TRACKER_FILE}` is updated immediately — not when pull/merge requests merge.**
->    - `{SHARED_VERSION_CATALOGUE}` (on `{FIX_BRANCH_PREFIX}{feature-slug}`) lands on `{DEFAULT_BRANCH}` only when its PR merges; `{VERSION_TRACKER_FILE}` (on `{VERSION_TRACKER_BRANCH}`) is always current.
+>    - `{SHARED_VERSION_CATALOGUE}` (on `{FIX_BRANCH_PREFIX}{feature-slug}`) lands on `{DEFAULT_BRANCH}` only when its pull/merge request merges; `{VERSION_TRACKER_FILE}` (on `{VERSION_TRACKER_BRANCH}`) is always current.
 
 > **`{VERSION_TRACKER_FILE}` format** (for context when reading/parsing it): a Markdown
 > table on `{VERSION_TRACKER_BRANCH}` with one row per module —
@@ -594,7 +600,7 @@ idiomatic Kotlin (coroutines over `Handler`, safe calls, no `!!`).
 
 Run the module's `{build_command}` (e.g. `./gradlew :{primary_module}:assembleDebug`) before
 anything is committed. On failure, emit `❌ FATAL: build failed for {primary_module} — cannot
-raise a pull/merge request with a non-compiling fix.` and skip PR creation for this module
+raise a pull/merge request with a non-compiling fix.` and skip pull/merge-request creation for this module
 entirely — do not proceed to Step 9b for it. On success, continue.
 
 Then run the module's `{test_command}` when one exists; on failure emit
@@ -604,7 +610,7 @@ Then run the module's `{test_command}` when one exists; on failure emit
 `{test_command}` alone does not prove the leak is gone.
 - If the leak path is reproducible in a test environment (e.g. a Fragment navigation loop),
   add an instrumented test that repeats the path and asserts LeakCanary detects no leak.
-- If it isn't reproducible in tests, note in the PR description: "Leak fix verified manually:
+- If it isn't reproducible in tests, note in the pull/merge-request description: "Leak fix verified manually:
   navigated [user journey] N times, no LeakCanary alert fired."
 
 **Backward-compatibility check (library modules only):** If `{primary_module}` publishes an
@@ -613,8 +619,8 @@ whether the fix changed any **public** class, method signature, or field — not
 implementation details:
 - Prefer narrowing the change to `private`/`internal` visibility if the public surface doesn't
   need to change for the fix.
-- If a public signature change is unavoidable, note it explicitly in the PR description under a
-  **Breaking Change** heading, and repeat the note in the version-catalogue PR description so
+- If a public signature change is unavoidable, note it explicitly in the pull/merge-request description under a
+  **Breaking Change** heading, and repeat the note in the version-catalogue pull/merge-request description so
   consumer reviewers see it before merging: "This version bump also changes `{class}.{method}` —
   consumers calling that API directly will need to update their call site."
 - If the module has a binary-compatibility tool already configured (e.g. Kotlin's
@@ -624,7 +630,7 @@ implementation details:
 ### 9b — Branch, bump versions & raise pull/merge requests
 
 If you have `{ORG_BRANCHING_WORKFLOW}`, follow it in full — branch creation, the two
-version-file bumps, and PR creation. Otherwise, follow the inline mechanics below directly.
+version-file bumps, and pull/merge-request creation. Otherwise, follow the inline mechanics below directly.
 Either way, resolve these variables first (from Steps 3–8):
 
 | Variable | Value |
@@ -676,8 +682,8 @@ If any step deviates from this sequence (e.g. reads the starting version from
          reading versions from the wrong source. Aborting to prevent a build-file ↔
          version-catalogue mismatch. Fix the branching workflow before re-running.
 ```
-remove the Step 8.0 lock file (`rm -f "{workspace_root}/.android-memoryleak-solver.lock"`), and
-stop the entire run before any version bump or PR creation — this is a structural problem with
+remove the Step 8.0 lock file (`rm -f "{workspace_root}/.android-memory-leak-solver.lock"`), and
+stop the entire run before any version bump or pull/merge-request creation — this is a structural problem with
 the shared branching workflow, not specific to one leak, so no module in this run can proceed.
 
 **Consumer null-path guard (applies to every consumer in `$ORDERED_CONSUMERS`):**
@@ -695,17 +701,17 @@ Before branching, editing, or raising a pull/merge request for each consumer mod
             (Rule 5's tracker bump is unconditional) but no pull/merge request can be raised
             for it. Manually verify the repo exists and re-run the cascade for this consumer.
    ```
-   Skip this consumer's file edits and PR creation, but continue to the next consumer in
+   Skip this consumer's file edits and pull/merge-request creation, but continue to the next consumer in
    `$ORDERED_CONSUMERS` — a null path on one consumer must never abort the rest of the cascade.
 
 5. After processing every entry in `$ORDERED_CONSUMERS`, if **all** of them were skipped for a
-   null path (i.e. zero consumer PRs were raised despite `$ORDERED_CONSUMERS` being non-empty),
-   surface this loudly in the Step 9c summary — the primary module's own PR is still valid and
+   null path (i.e. zero consumer pull/merge requests were raised despite `$ORDERED_CONSUMERS` being non-empty),
+   surface this loudly in the Step 9c summary — the primary module's own pull/merge request is still valid and
    should still be raised, but a fully-failed cascade means every downstream consumer is left
    silently pinned to the old artifact and needs manual follow-up:
    ```
    ⚠️ WARN: Every consumer in this run's cascade ({consumer_count} total) hit a null-path skip —
-            zero consumer pull/merge requests were raised. The primary module's PR is
+            zero consumer pull/merge requests were raised. The primary module's pull/merge request is
             unaffected, but downstream consumers will not pick up this fix until their repos
             are located and the cascade is re-run manually for them.
    ```
@@ -743,18 +749,18 @@ entirely — it doesn't apply.
    credentials your `{GIT_HOST_CLI}` needs.
 2. Primary module repo — create `{FIX_BRANCH_PREFIX}{feature-slug}`, apply the fix (9a), commit, push.
 3. Raise the primary module pull/merge request (`{FIX_BRANCH_PREFIX}...` → `{DEFAULT_BRANCH}`).
-4. If `{consumer_modules}` is non-empty: version-catalogue bump + its PR, then each consumer repo (branch, version bump, build-config repoint, PR) in `$ORDERED_CONSUMERS` order.
+4. If `{consumer_modules}` is non-empty: version-catalogue bump + its pull/merge request, then each consumer repo (branch, version bump, build-config repoint, pull/merge request) in `$ORDERED_CONSUMERS` order.
 5. Repeat 2–4 for any additional affected module (multi-leak runs spanning modules).
 
 **Mid-cascade failure guard:** `{VERSION_TRACKER_FILE}` is pushed to
-`{VERSION_TRACKER_BRANCH}` *before* each consumer's own PR is confirmed raised (Rule 5's
-tracker bump is unconditional). If PR creation then fails for a consumer (network,
+`{VERSION_TRACKER_BRANCH}` *before* each consumer's own pull/merge request is confirmed raised (Rule 5's
+tracker bump is unconditional). If pull/merge-request creation then fails for a consumer (network,
 permissions, branch conflict), do **not** continue to the next consumer in
 `$ORDERED_CONSUMERS`. Emit:
 
 ```
 ⚠️ WARN: {consumer} version bumped in the tracker but pull/merge-request creation failed —
-         the tracker is now ahead of raised PRs. Manually verify/re-raise the PR for
+         the tracker is now ahead of raised pull/merge requests. Manually verify/re-raise the pull/merge request for
          {consumer} before any other run touches this module.
 ```
 
@@ -764,14 +770,14 @@ Step 8a may still proceed).
 ### 9c — Final summary
 
 Print the consolidated pull/merge-request list and the reviewer merge order — **the
-version-catalogue PR first, then the primary module PR, then each consumer PR**. For each
-module a PR was raised for, restate that its `{build_command}` passed (Step 9a already
-gates PR creation on this — a PR only exists here because the build succeeded — but say so
+version-catalogue pull/merge request first, then the primary module pull/merge request, then each consumer pull/merge request**. For each
+module a pull/merge request was raised for, restate that its `{build_command}` passed (Step 9a already
+gates pull/merge-request creation on this — a pull/merge request only exists here because the build succeeded — but say so
 explicitly for developer visibility):
 ```
 ✅ {primary_module}: build passed, pull/merge request raised → {primary_pr_url}
 ```
-Then remove the Step 8.0 lock file: `rm -f "{workspace_root}/.android-memoryleak-solver.lock"`.
+Then remove the Step 8.0 lock file: `rm -f "{workspace_root}/.android-memory-leak-solver.lock"`.
 
 ---
 
