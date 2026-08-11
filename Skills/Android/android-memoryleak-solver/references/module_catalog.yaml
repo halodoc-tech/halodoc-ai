@@ -1,0 +1,83 @@
+# module_catalog.yaml — TEMPLATE
+#
+# WHY THIS FILE EXISTS
+# ─────────────────────
+# When a LeakCanary trace names a class like `{FIRST_PARTY_PACKAGE_PREFIXES}payments.CheckoutActivity`,
+# the skill (Step 4d "Module & repo verification", Step 8a "Resolve the primary module(s)")
+# needs to turn that package into: which module owns it, and which git repo do I clone to
+# read/fix it. Without this file, the skill has to *guess* that mapping from the package
+# name alone every single run — workable for a small, obviously-named codebase, unreliable
+# once you have dozens of modules, sub-modules living inside a shared repo, or naming that
+# doesn't match the package 1:1.
+#
+# This file is domain knowledge, written once by whoever owns your module structure, and
+# read by the skill at Step 1. It answers exactly one question per module: "what does this
+# module own, and where does its source live?" — nothing else. It intentionally does NOT
+# hold version numbers, artifact coordinates, local checkout paths, or build/test commands;
+# those change constantly and belong in your project configuration (Step 1) or your build
+# system's own files, not in a hand-maintained catalog that would drift out of date.
+#
+# THIS FILE IS OPTIONAL
+# ──────────────────────
+# If you don't maintain one, the skill falls back to reasoning from the package name and
+# whatever project configuration it can find (see `{ORG_MODULE_CATALOG}` in ../SKILL.md's
+# Configuration section). A catalog like this one just makes that resolution exact instead
+# of inferred, and is worth building once you have more than a handful of modules.
+#
+# HOW TO USE THIS TEMPLATE
+# ──────────────────────────
+# 1. Delete the two example entries below and replace them with your own modules.
+# 2. One entry per module (or per app shell, under `apps:`) — see the schema in each
+#    example's comments.
+# 3. `owns:` is a short, human-readable list of what the module is responsible for in
+#    product terms — this is what lets the skill (and other skills sharing this file, if
+#    you reuse it elsewhere) reason about *which* module a leak, feature, or bug most
+#    plausibly belongs to, not just which package prefix matched.
+# 4. Keep it updated when a module is renamed, merged, split, or re-owned — treat drift
+#    here the same as you'd treat a stale README.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+_meta:
+  version: "1.0"
+  maintained_by: "{team or role responsible for keeping this current, e.g. 'Android Tech Lead'}"
+  last_updated: "{YYYY-MM-DD}"
+  note: >
+    Domain knowledge + git repo URLs only. Versions, artifact IDs, build paths, and SDK
+    targets are all derived at runtime from your build system — they are not stored here
+    to avoid drift.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXAMPLE 1 — an application shell (a `{BASE_APP_MODULES}` entry)
+# Goes under `apps:` rather than `modules:` when the entry is a top-level installable app,
+# not a library other modules depend on.
+# ─────────────────────────────────────────────────────────────────────────────
+
+apps:
+  example-consumer-app:
+    display_name: "Example Consumer App"
+    domain: "app-shell"
+    git_repo: "https://github.com/your-org/example-consumer-app.git"
+    owns:
+      - "App-level navigation graph and deep link routing"
+      - "Module dependency wiring"
+      - "Splash screen and onboarding entry point"
+    build_flavors: [staging, production]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXAMPLE 2 — a shared library module (something with `$ORDERED_CONSUMERS` in Step 8b)
+# Goes under `modules:`. `notes:` is free text for anything a reader would otherwise have
+# to dig through source to learn — e.g. that a module is a sub-module living inside a
+# different repo than its name suggests.
+# ─────────────────────────────────────────────────────────────────────────────
+
+modules:
+  example-payments:
+    display_name: "Example Payments"
+    domain: "payments"
+    git_repo: "https://github.com/your-org/example-payments.git"
+    owns:
+      - "Payment method selection and checkout flow"
+      - "Payment gateway integration"
+      - "Payment success/failure screens"
+    notes: "Consumed by every purchase-flow feature module — expect a wide consumer cascade."
