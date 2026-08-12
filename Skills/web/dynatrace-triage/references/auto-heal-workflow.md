@@ -36,7 +36,7 @@ registry = ${REGISTRY_PATH:-~/.claude/dynatrace-triage-workspace/<repo-name>}/re
 ## Phase -1: Acquisition setup
 
 **Before any Dynatrace access happens**, resolve the two required inputs —
-there is no data-source choice to make; Mode 3 always live-pulls from the
+select the acquisition path (see below); previously this was browser-only:
 Error Inspector Explorer per [live-pull.md](./live-pull.md):
 
 - `--frontend <frontend-id>` — the Dynatrace `Frontend` filter value for the
@@ -45,9 +45,15 @@ Error Inspector Explorer per [live-pull.md](./live-pull.md):
 - `--first-party-domain <domain>` — the app's own domain, for
   `eligibility.py`'s hard 1st-party filter. Read from the invocation, or ask
   if not given.
-- Confirm a Chrome session with access to the Dynatrace tenant is available
-  (`mcp__claude-in-chrome__*` tools). If not, stop and tell the user Mode 3
-  cannot run without it — there is no CSV or token fallback.
+- **Select the acquisition path.** If `DT_API_TOKEN` is set (or the user points
+  at a token file), use [token-pull.md](./token-pull.md) — Grail DQL, the
+  preferred path. Otherwise confirm a Chrome session with access to the
+  Dynatrace tenant (`mcp__claude-in-chrome__*` tools) and use
+  [live-pull.md](./live-pull.md). If neither is available, stop and tell the
+  user Mode 3 cannot run — there is no CSV fallback. Record which path was
+  used in the registry and on the board: the two paths report different impact
+  metrics (distinct sessions vs. the dashboard's affected users), so runs are
+  only comparable against runs from the same path.
 
 **Sanity-check the domain pairing**: confirm `--first-party-domain` actually
 corresponds to the same site as `--frontend` (e.g. domain

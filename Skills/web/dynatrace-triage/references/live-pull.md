@@ -3,9 +3,13 @@
 Acquires the eligible-error dataset directly from the Dynatrace Error
 Inspector Explorer UI via the `claude-in-chrome` tools, using the analyst's
 own authenticated browser session — no `DT_API_TOKEN` or new credentials
-required. **This is the only acquisition path for Mode 3** — there is no
-CSV import and no DQL/token alternative; Mode 3 always pulls live from this
-dashboard.
+required.
+
+**This is the fallback acquisition path.** Prefer
+[token-pull.md](./token-pull.md) (Grail DQL) whenever a token is available: it
+is deterministic, needs no screenshots, and reports exact counts. Use this path
+when no token exists or the token cannot be granted Grail RUM read. There is no
+CSV import on either path.
 
 ## Contents
 
@@ -15,9 +19,16 @@ dashboard.
 
 ## When to use this path
 
-Always — every Mode 3 run. A Chrome session with access to the Dynatrace
-tenant is required (`mcp__claude-in-chrome__*` tools); if none is available,
-tell the user Mode 3 cannot run without it (there is no fallback).
+When [token-pull.md](./token-pull.md) is unavailable — no `DT_API_TOKEN`, or the
+token cannot be granted `storage:user.events:read`. A Chrome session with access
+to the Dynatrace tenant is required (`mcp__claude-in-chrome__*` tools); if
+neither a token nor a Chrome session is available, tell the user Mode 3 cannot
+run and stop.
+
+Note on extraction: this app renders its grid inside **cross-origin iframes**, so
+`javascript_tool` DOM extraction is blocked and the accessibility tree exposes
+only the nav shell. Screenshot-based reading (below) is the only option here —
+which is the main reason the token path is preferred.
 
 ## Procedure
 

@@ -43,9 +43,10 @@ crashes, or errors from a monitoring source other than Dynatrace.
 - The live-pull depends on the Dynatrace Error Inspector Explorer's current
   UI shape ([live-pull.md](./references/live-pull.md)), which may change
   without notice between Dynatrace releases — locate elements fresh each run
-  rather than hardcoding coordinates/selectors. There is no CSV or API-token
-  fallback; Mode 3 requires an interactive Claude Code session with Chrome
-  browser access.
+  rather than hardcoding coordinates/selectors. This applies only to the
+  browser fallback — prefer [token-pull.md](./references/token-pull.md), whose
+  DQL contract is stable. There is no CSV fallback on either path; the browser
+  path additionally requires an interactive session with Chrome access.
 - The 75% remediation target is a heuristic default, not a hard
   requirement — adjust to your team's SLA.
 - **Sourcemap unavailability:** if production sourcemaps are disabled by
@@ -70,7 +71,8 @@ Keep this file as the orchestrator. Load only the extra files you need.
 | [sourcemaps.md](./references/sourcemaps.md) | 106 | Deobfuscating minified `<your-domain>/resources/*.js` frames |
 | [auto-heal-workflow.md](./references/auto-heal-workflow.md) | 394 | Mode 3 batch pipeline (load early for any heal run) |
 | [eligibility.md](./references/eligibility.md) | 120 | Auto-heal targeting rules (users threshold, hard 1st/3rd-party filter) |
-| [live-pull.md](./references/live-pull.md) | 123 | Pulling errors live via an authenticated Chrome session — the only Mode 3 acquisition path |
+| [token-pull.md](./references/token-pull.md) | 194 | Pulling errors via Grail DQL with a platform token — the preferred Mode 3 acquisition path (verified data-object/field names, 403 signatures, sessions-vs-users caveat) |
+| [live-pull.md](./references/live-pull.md) | 134 | Pulling errors live via an authenticated Chrome session — the fallback acquisition path when no token is available |
 | [visualization.md](./references/visualization.md) | 89 | The pre-fix triage board and post-run fixed/not-fixed board — rendered as Claude Code HTML Artifacts, redeployed to the same URL between the pre- and post-run render |
 | [sourcemap-preflight.md](./references/sourcemap-preflight.md) | 53 | Checking/enabling production sourcemaps — a read/write check: no-op if already enabled, else its own dedicated branch/MR (never mixed into an error-fix branch) |
 | [registry-format.md](./references/registry-format.md) | 104 | The attribution registry schema and run report |
@@ -105,7 +107,8 @@ If your team's SLA requires human review for ALL prod changes, use `--dry-run` t
 - In heal mode, 1st-party is a HARD filter applied before anything else — 3rd-party errors (ad/analytics scripts, browser extensions, opaque cross-origin) never enter the fix queue on a "suspected" basis, but they are still shown (excluded, with reason) on the pre-fix visualization for auditability.
 - `--first-party-domain` takes a bare domain (e.g. `<your-domain>`, no protocol) and matches by **suffix** — `<your-domain>` matches `<your-domain>` itself and any subdomain (`www.<your-domain>`, `app.<your-domain>/resources/chunk.js`), but not unrelated domains that merely contain the string. Pass the flag multiple times to allow multiple first-party domains in one run (e.g. `--first-party-domain <your-domain> --first-party-domain <another-domain>`).
 - **Branch conflict handling:** if two fixes in the same run would modify the same file, their MRs could conflict. Before branching for an error, run `scripts/registry.py check-files --run-id <run> --error-id <id> --files <comma-separated planned files>` against the errors already `auto-fixed` this run. On conflict (nonzero exit), mark the error `deferred-conflict` (`registry.py update ... --status deferred-conflict --note "conflicts with <other error id> on <file>"`) and skip it this run — it re-enters the queue on the next auto-heal run once the conflicting MR has merged. This trades same-run parallelism for merge safety; it does not attempt to reconcile the two fixes automatically. Full protocol: [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B.
-- In heal mode, never touch Dynatrace before Phase -1's `--frontend` and `--first-party-domain` values are resolved — ask if not specified.
+- In heal mode, never touch Dynatrace before Phase -1's `--frontend` and `--first-party-domain` values are resolved and an acquisition path is selected — ask if not specified.
+- Mode 3 considers **only** these three targeting criteria: a **3-day rolling window**, **1st-party errors only** (hard-excluded before scoring), and **>=100 affected users**. Never add, widen, or substitute a criterion — not the window, not the error type (`exception` only), not the threshold — without the user asking for it.
 - Re-run safety: before branching, the skill checks whether the error ID already has an open or merged MR recorded in the registry; if so, the error is skipped — its existing status (`auto-fixed`/`auto-fixed-mr-pending`/etc.) is left unchanged and a note is appended (e.g. "skipped: already has an open MR from a prior run"), it is not relabeled to a separate "duplicate" status. `reverted`/`reopened`/`deferred-conflict` entries are the exception — those are re-processed, not skipped (see [auto-heal-workflow.md](./references/auto-heal-workflow.md) Phase 2B's re-run dedupe for full logic).
 - Never use `innerHTML`, `outerHTML`, `dangerouslySetInnerHTML`, `bypassSecurityTrustHtml`, or `eval()`/`new Function()` in a fix — use safe alternatives (`textContent`, `DomSanitizer`, framework-native rendering) or explicitly document why the risk is unavoidable. Full detail: [architecture-rules.md](./references/architecture-rules.md)'s Security Constraints.
 - If the target repo uses SSR (Angular Universal, Next.js, etc.), ensure fixes avoid browser-only APIs (`window`, `document`, `localStorage`) in SSR-executed code paths — guard with `isPlatformBrowser`/`typeof window !== 'undefined'` or a client-only lifecycle hook.
@@ -261,10 +264,12 @@ Read these before acting:
 
 Then:
 1. **Phase -1**: resolve `--frontend` and `--first-party-domain` (ask if
-   either isn't specified) and confirm a Chrome session with tenant access
-   is available — BEFORE touching Dynatrace. There is no other acquisition
-   path to choose between; Mode 3 always live-pulls via
-   [live-pull.md](./references/live-pull.md).
+   either isn't specified), then pick the acquisition path — BEFORE touching
+   Dynatrace. Prefer [token-pull.md](./references/token-pull.md) (Grail DQL)
+   when `DT_API_TOKEN` is set; otherwise confirm a Chrome session with tenant
+   access and use [live-pull.md](./references/live-pull.md). If neither is
+   available, stop and say so. Both paths feed the same row shape, so
+   everything downstream is identical.
 2. Run Phase 0 preconditions: verify Python 3 is available (`python3 --version`; if not found, tell the user "Python 3 is required but not installed — install it or run in an environment where it's available" and stop), clean tree, latest master, sourcemap preflight, registry init.
 3. Pull errors via the chosen path (3-day window), build the work queue with `scripts/eligibility.py` (hard 1st-party filter, then threshold), register every row. **If the queue is empty after filtering** (every row was 3rd-party or below the users threshold), print "No eligible errors found — 0 errors passed the 1st-party filter and min-users threshold. Nothing to fix." and exit cleanly — do not create registry entries beyond the `init` record, do not render the visualization, and do not proceed to Phase 2A/2B.
 4. **Phase 2A**: diagnose every eligible error (evidence, confidence, planned action) with no side effects yet.

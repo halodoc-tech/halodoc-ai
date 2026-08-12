@@ -39,7 +39,14 @@ VENDOR_PATTERNS = [
     r"\bSentry\b", r"\bdtrum\b", r"\bnewrelic\b", r"\bNREUM\b",
     r"\bhotjar\b", r"\bmixpanel\b", r"\bamplitude\b",
     r"googlesyndication", r"doubleclick", r"adsbygoogle",
+    # Google Publisher Tag: its own bracketed error prefix and its page global.
+    # `googletagmanager` above does NOT cover these — GPT is a separate SDK.
+    r"\[GPT\]", r"\bgoogletag\b",
 ]
+# A frame whose scheme is neither http(s) nor a browser-extension scheme is a
+# native/in-app-browser bridge (e.g. `iabjs://…`), never our own bundle.
+NON_WEB_SCHEME = re.compile(r"^\s*([a-z][a-z0-9.+-]*)://", re.IGNORECASE)
+WEB_SCHEMES = {"http", "https"}
 EXTENSION_SCHEMES = [
     "chrome-extension://", "moz-extension://", "safari-web-extension://",
     "safari-extension://", "ms-browser-extension://",
@@ -88,6 +95,12 @@ def third_party_signals(error_text, first_party_domains):
     m = VENDOR_RE.search(text)
     if m:
         signals.append(f"vendor-pattern: {m.group(0)}")
+    scheme_m = NON_WEB_SCHEME.match(text)
+    if scheme_m:
+        scheme = scheme_m.group(1).lower()
+        # Extension schemes are already reported above; don't double-flag them.
+        if scheme not in WEB_SCHEMES and f"{scheme}://" not in EXTENSION_SCHEMES:
+            signals.append(f"non-web-scheme: {scheme}://")
     domain = extract_domain(text)
     if domain and not any(
         domain == fp or domain.endswith(f".{fp}") for fp in first_party_domains
