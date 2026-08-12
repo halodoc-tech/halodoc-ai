@@ -24,11 +24,18 @@ matters as much as the queue itself.
 |---|---|
 | Error | error text (truncated) + error_id |
 | Affected Users | from the pull, sorted desc |
+| Top pages | the 2-3 highest-session `view.url.path` values for this error, with counts — where it actually happens. `—` if the pull returned none |
 | Root-Cause Hypothesis | one-line `symptom → trigger → root_cause` from Phase 2A's diagnosis |
 | Confidence | `source_confidence / fix_confidence` (e.g. `high/high`, `medium/low`) |
 | Planned Action | `Auto-Fix` or `Report-Only`, color-coded (green / gray) |
 
 Sort by Affected Users descending — matches the eligibility queue order.
+
+**Top pages is not optional.** It is the strongest routing signal on the
+board: an error concentrated on one path is a route-specific fault and names
+the module to open, while one spread across many paths and led by `/` is a
+bootstrap/app-shell fault where the page list is deliberately uninformative.
+Say which of the two a row is, rather than leaving the reader to infer it.
 
 ### Excluded section (below the main table, collapsible or visually secondary)
 
@@ -52,6 +59,7 @@ Same row set, columns updated to reflect what actually happened:
 |---|---|
 | Error | unchanged |
 | Affected Users | unchanged |
+| Top pages | unchanged |
 | Outcome | `Fixed` / `Reported` / `Fix Failed → Reported` — color-coded (green / gray / amber) |
 | Detail | for Fixed: MR link; for Reported: one-line reason (low confidence, or test-gate failure) |
 
@@ -64,7 +72,7 @@ auto-fixed (must read 100%), and any blockers (e.g. `glab` missing →
 
 ## Worked example (one row, pre-fix board)
 
-| Error | Affected Users | Root-Cause Hypothesis | Confidence | Planned Action |
+| Error | Affected Users | Top pages | Root-Cause Hypothesis | Confidence | Planned Action |
 |---|---|---|---|---|
 | `TypeError: Cannot read properties of undefined (reading 'currentValue')` — `261e721354a6680a` | 178 | `symptom:` ngOnChanges throws on a partial changes object → `trigger:` fast re-render omits an entry → `root_cause:` missing existence guard before dereferencing `currentValue` | high/high | **Auto-Fix** (green) |
 

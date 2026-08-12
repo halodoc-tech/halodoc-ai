@@ -128,6 +128,34 @@ fetch user.events, from:-3d
 | limit 5
 ```
 
+### Where the errors happen — page URLs (required)
+
+Always resolve the affected page paths. Which pages an error concentrates on is
+usually the strongest routing signal available: it distinguishes a global
+failure from a single-route regression, and it names the module to look in.
+
+```dql
+fetch user.events, from:-3d
+| filter frontend.name == "<frontend-id>" and error.type == "exception"
+    and isNotNull(view.url.path)
+| summarize sessions = countDistinct(dt.rum.session.id),
+    by:{error.name, view.url.path}
+| filter sessions > 50
+| sort sessions desc
+| limit 300
+```
+
+One aggregated query covers the whole queue — do not run this per error. Carry
+the top paths per error into the registry, the triage board (see
+[visualization.md](./visualization.md)) and the MR body. Prefer `view.url.path`
+over `page.url.full`: paths group cleanly, whereas full URLs fragment the
+aggregation across query strings.
+
+Read the distribution, don't just list it:
+- concentrated on one path → a route/module-specific fault; start in that module
+- spread evenly across many paths, led by `/` → a global bootstrap/app-shell
+  fault, and the page list is not the useful signal
+
 ## Normalize to the canonical row shape
 
 Map each aggregated row to [eligibility.md](./eligibility.md)'s schema, then run
