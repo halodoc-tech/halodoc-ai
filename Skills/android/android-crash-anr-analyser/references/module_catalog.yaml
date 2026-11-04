@@ -1,0 +1,95 @@
+# module_catalog.yaml — EXAMPLE (all entries are fictional)
+#
+# WHY THIS FILE EXISTS
+# ─────────────────────
+# A crash frame such as `com.example.shop.orders.CartViewModel.applyCoupon` tells the skill
+# which class failed, not which repo to open. Step 4g of ../SKILL.md first looks in your
+# workspace config, then greps the repos already on disk. When the owning repo is not
+# cloned yet — common on a fresh CI agent — this catalog lets the skill map the package
+# prefix to a repo URL and clone it, instead of stopping at analysis.
+#
+# It also gives the skill product context ("owns:") when a frame sits on a boundary between
+# two modules, and tells it which entries are application shells (`apps:`) so it knows
+# which modules publish an artifact and which sit at the bottom of the version cascade.
+#
+# WHAT GOES HERE: package prefixes, ownership in product terms, git repo URL, notes.
+# WHAT DOES NOT: versions, artifact coordinates, local paths, build commands — those
+# change constantly and belong in your build system and workspace config.
+#
+# THIS FILE IS OPTIONAL. Point {ORG_MODULE_CATALOG} at your own copy, or delete it and the
+# skill falls back to grepping cloned repos.
+#
+# HOW TO ADAPT
+#   1. Replace every entry below with your own modules.
+#   2. `packages:` lists the prefixes Step 4g matches against (longest match wins).
+#   3. Several modules can live in one repo — give each its own entry with the same git_repo.
+#   4. Update it in the same change that renames, splits, or moves a module.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_meta:
+  version: "1.0"
+  maintained_by: "{team or role that owns the module structure}"
+  last_updated: "{YYYY-MM-DD}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# APPLICATION SHELLS — the {BASE_APP_MODULES}. They consume libraries and publish nothing,
+# so they are always last in the consumer cascade and never get an own-build-file bump.
+# ─────────────────────────────────────────────────────────────────────────────
+
+apps:
+  example-shop-app:
+    display_name: "Example Shop (customer app)"
+    git_repo: "https://git.example.com/mobile/example-shop-app.git"
+    packages: ["com.example.shop.app"]
+    owns:
+      - "Navigation graph and deep-link routing"
+      - "Application class, startup initialisers, DI root"
+      - "Wiring of every feature library"
+    build_flavors: [staging, production]
+
+  example-courier-app:
+    display_name: "Example Courier (driver app)"
+    git_repo: "https://git.example.com/mobile/example-courier-app.git"
+    packages: ["com.example.courier.app"]
+    owns:
+      - "Courier app shell, navigation, startup"
+      - "Background location service host"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LIBRARY MODULES — publish an artifact; have consumers; get the full version cascade.
+# ─────────────────────────────────────────────────────────────────────────────
+
+modules:
+  core-kit:
+    display_name: "Core Kit"
+    git_repo: "https://git.example.com/mobile/core-kit.git"
+    packages: ["com.example.core"]
+    owns:
+      - "Base ViewModel and Fragment classes"
+      - "HTTP client setup and interceptors"
+      - "Shared coroutine dispatcher provider"
+    notes: "Almost every library depends on this — expect the widest consumer cascade."
+
+  ui-widgets:
+    display_name: "UI Widgets"
+    git_repo: "https://git.example.com/mobile/core-kit.git"
+    packages: ["com.example.core.widgets"]
+    owns:
+      - "Reusable list, sheet, and form components"
+    notes: "Lives inside the core-kit repo as a second Gradle module."
+
+  orders-lib:
+    display_name: "Orders"
+    git_repo: "https://git.example.com/mobile/orders-lib.git"
+    packages: ["com.example.shop.orders"]
+    owns:
+      - "Cart, coupons, and order summary screens"
+      - "Order history and order detail"
+
+  catalogue-lib:
+    display_name: "Catalogue"
+    git_repo: "https://git.example.com/mobile/catalogue-lib.git"
+    packages: ["com.example.shop.catalogue"]
+    owns:
+      - "Product listing, search, and product detail"
+      - "Home feed and its local cache"
