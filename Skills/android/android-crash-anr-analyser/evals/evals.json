@@ -1,0 +1,170 @@
+{
+  "skill_name": "android-crash-anr-analyser",
+  "notes": "All names, IDs and traces are fictional. Unless an eval says otherwise, the workspace contains no checkout of the owning repo and no crash backend is connected, so these evals exercise parsing, analysis, ACTION routing and the exit contract without touching a real git host. Grade each assertion against the console output and the final run-result JSON block.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "pasted-npe-natural-language-fix",
+      "prompt": "Fix this crash from the shop app:\n\nFATAL EXCEPTION: main\nProcess: com.example.shop, PID: 4242\njava.lang.NullPointerException: Attempt to invoke virtual method 'java.math.BigDecimal com.example.shop.orders.model.Cart.getTotal()' on a null object reference\n\tat com.example.shop.orders.CartViewModel$applyCoupon$1.invokeSuspend(CartViewModel.kt:118)\n\tat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\n\tat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\n\tat android.os.Handler.handleCallback(Handler.java:942)\n\tat android.os.Looper.loop(Looper.java:288)\n\tat android.app.ActivityThread.main(ActivityThread.java:7918)",
+      "files": [],
+      "expected_output": "The pasted trace is taken as MANUAL_ISSUE_TEXT (Mode C) with ACTION=FIX inferred from 'fix'. The root location is the first-party coroutine frame, normalised to CartViewModel / applyCoupon, classified C4 with origin APP. The owning repo is not on disk, so the run warns and stops at analysis rather than failing.",
+      "expected": {
+        "status": "ANALYSIS_ONLY",
+        "mode": "C",
+        "action": "FIX",
+        "issue.type": "CRASH",
+        "issue.id_pattern": "^manual-[0-9a-f]{8}$",
+        "analysis.issue_class": "C4",
+        "analysis.origin": "APP",
+        "analysis.root_location_prefix": "com.example.shop.orders.CartViewModel"
+      },
+      "assertions": [
+        "Logs an AUTO line inferring MANUAL_ISSUE_TEXT from the message; no FATAL for a missing selector",
+        "Logs action=FIX chosen by the verb rule (rule 3)",
+        "Strips the frame class from the first '$' and reports the enclosing method applyCoupon",
+        "Feature slug matches crash-fix-cartviewmodel-manual-<8 hex>",
+        "Emits the 'Module for … not found' WARN and the Step 7 'stopping at analysis' WARN, not a FATAL",
+        "No branch is created, nothing is pushed, pull_requests is []",
+        "Run result JSON is the last fenced block and has every top-level key, with fatal null"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "obfuscated-root-frame",
+      "prompt": "ISSUE_TYPE=CRASH ACTION=FIX MANUAL_ISSUE_TEXT=\"java.lang.IllegalStateException: state\n\tat a.b.c.a(SourceFile:3)\n\tat a.b.d.b(SourceFile:11)\n\tat a.b.d.onClick(SourceFile:2)\n\tat android.view.View.performClick(View.java:7448)\n\tat android.os.Handler.handleCallback(Handler.java:942)\"",
+      "files": [],
+      "expected_output": "Every first-party frame is obfuscated, so no class is guessed; the analysis document is written and no fix is attempted.",
+      "expected": {
+        "status": "ANALYSIS_ONLY",
+        "mode": "C",
+        "action": "FIX",
+        "analysis.obfuscated_frames": true,
+        "analysis.confidence": "LOW"
+      },
+      "assertions": [
+        "Emits '⚠️ WARN: Root frame is obfuscated — fix not attempted.'",
+        "Does not name any real class for a.b.c.a or a.b.d.b",
+        "Recommends uploading the mapping file and re-fetching, in the analysis document",
+        "No branch, push, or PR; versions and pull_requests are []"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "anr-lock-holder",
+      "prompt": "Investigate this ANR dump:\n\n\"main\" prio=5 tid=1 Blocked\n  | group=\"main\" sCount=1 ucsCount=0 flags=1 obj=0x72a1 self=0xb400\n  at com.example.shop.catalogue.FeedCache.snapshot(FeedCache.kt:41)\n  - waiting to lock <0x0a1b> (a com.example.shop.catalogue.FeedCache) held by thread 23\n  at com.example.shop.catalogue.HomeFeedViewModel.load(HomeFeedViewModel.kt:57)\n  at com.example.shop.catalogue.HomeFeedFragment.onViewCreated(HomeFeedFragment.kt:33)\n  at android.os.Looper.loop(Looper.java:288)\n\n\"feed-sync-2\" prio=5 tid=23 Native\n  at java.io.FileInputStream.read(FileInputStream.java:276)\n  at com.example.shop.catalogue.FeedCache.readFromDisk(FeedCache.kt:102)\n  at com.example.shop.catalogue.FeedCache.refresh(FeedCache.kt:88)\n  - locked <0x0a1b> (a com.example.shop.catalogue.FeedCache)\n  at com.example.shop.catalogue.FeedSyncWorker.doWork(FeedSyncWorker.kt:29)",
+      "files": [],
+      "expected_output": "ISSUE_TYPE=ANR is inferred, ACTION=ANALYSE from 'investigate'. The main thread waits on 0x0a1b, the lock holder is feed-sync-2 inside FeedCache.refresh doing disk I/O, so the root location is the holder's frame and the class is C6-LOCK.",
+      "expected": {
+        "status": "ANALYSIS_ONLY",
+        "mode": "C",
+        "action": "ANALYSE",
+        "issue.type": "ANR",
+        "analysis.issue_class": "C6-LOCK",
+        "analysis.origin": "APP",
+        "analysis.root_location_prefix": "com.example.shop.catalogue.FeedCache.refresh"
+      },
+      "assertions": [
+        "Logs inferred ISSUE_TYPE=ANR and action=ANALYSE (rule 4)",
+        "Names feed-sync-2 as the lock holder and FeedCache.refresh as the root location, not FeedCache.snapshot",
+        "Hypothesis says the monitor is held across a disk read",
+        "TC-001 in test_cases.json uses a test dispatcher or bounded wait and states a threading assertion the unfixed code fails",
+        "No branch, push, or PR is created"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "no-selector-fatal-shape",
+      "prompt": "Can you help with a crash?",
+      "files": [],
+      "expected_output": "No trace, app, issue ID or file is present, so Step 0 stops with the no-selector FATAL and still prints the full run-result JSON.",
+      "expected": {
+        "status": "FATAL",
+        "mode": null,
+        "fatal_prefix": "❌ FATAL: No issue selector provided."
+      },
+      "assertions": [
+        "Prints 'ℹ️ Skill: android-crash-anr-analyser' first",
+        "Does not ask a clarifying question",
+        "The final fenced json block contains every top-level key from output_schema.md (skill, status, mode, action, issue, analysis, build, versions, pull_requests, consumers, artifacts, warnings, fatal)",
+        "analysis and build are null, versions and pull_requests are [], fatal holds the FATAL message"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "action-analyse-top-anr-by-app-name",
+      "prompt": "Look at the top ANR for the shop app",
+      "files": [],
+      "setup": "APP_REGISTRY maps SHOP to 'Example Shop - Android'. A fake crash backend returns one top ANR whose sample is a main thread doing SharedPreferences commit() from com.example.shop.app.StartupInitializer.onCreate. The example-shop-app repo is checked out but on a stale local branch with an uncommitted change.",
+      "expected_output": "APP=SHOP and ISSUE_TYPE=ANR are inferred, ACTION=ANALYSE. The run classifies C6-IO, reads the chain from origin/{DEFAULT_BRANCH} without switching branches, and stops after Step 6.",
+      "expected": {
+        "status": "ANALYSIS_ONLY",
+        "mode": "A",
+        "action": "ANALYSE",
+        "issue.app": "SHOP",
+        "issue.type": "ANR",
+        "analysis.issue_class": "C6-IO",
+        "versions": [],
+        "pull_requests": []
+      },
+      "assertions": [
+        "Logs inferred APP=SHOP and ISSUE_TYPE=ANR from the message",
+        "Never runs git checkout, git checkout -B, git commit, git push, or a PR-create command",
+        "Leaves the developer's branch and uncommitted change untouched; emits the 'checkout is not a clean origin/{DEFAULT_BRANCH}' WARN",
+        "Analysis document, sprint_plan.json and test_cases.json are written",
+        "Summary says no changes were made and to re-run with ACTION=FIX"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "idempotent-rerun",
+      "prompt": "ISSUE_TYPE=ANR APP=SHOP ISSUE_ID=7d20b8e4a6c1",
+      "files": [],
+      "setup": "CI=true. Same fake backend issue as references/worked_example.md. On the git host: branch {FIX_BRANCH_PREFIX}anr-fix-feedcache-7d20b8e4a6c1 exists in catalogue-lib, the catalogue repo and orders-lib, each head commit ending in 'Issue: 7d20b8e4a6c1'; the catalogue branch has 'chore: bump catalogue-lib to 3.2.8' and 'chore: bump orders-lib to 2.9.5'; the tracker reads catalogue-lib 3.2.8 and orders-lib 2.9.5; open PRs exist for catalogue-lib and the catalogue repo, none for orders-lib or example-shop-app. A stale local branch of the same name exists in the catalogue-lib checkout.",
+      "expected_output": "The run redoes the analysis, resumes every existing branch, reuses both versions without touching the tracker, reuses the two open PRs, and raises only the missing ones.",
+      "expected": {
+        "status": "SUCCESS",
+        "mode": "B",
+        "action": "FIX",
+        "versions": [
+          {
+            "module": "catalogue-lib",
+            "to": "3.2.8",
+            "reused_existing": true
+          },
+          {
+            "module": "orders-lib",
+            "to": "2.9.5",
+            "reused_existing": true
+          }
+        ]
+      },
+      "assertions": [
+        "Logs action=FIX (rule 2) because CI is set",
+        "Uses git checkout -B \"$BR\" \"origin/$BR\" for each existing branch; never a bare git checkout -b, and the stale local branch causes no error",
+        "No branch name contains a '{git_user}/' segment",
+        "No new commit on {VERSION_TRACKER_BRANCH}; the tracker still reads 3.2.8 and 2.9.5",
+        "Logs 'already bumped to 3.2.8 on this fix branch — reusing' for catalogue-lib",
+        "pull_requests marks catalogue-lib and the catalogue repo as reused_existing true, and has exactly one entry per repo",
+        "Every new commit ends with the line 'Issue: 7d20b8e4a6c1'"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "reproduction-not-verified",
+      "prompt": "ACTION=FIX MANUAL_ISSUE_TEXT=\"java.lang.IllegalStateException: Can not perform this action after onSaveInstanceState\n\tat androidx.fragment.app.FragmentManager.checkStateLoss(FragmentManager.java:1689)\n\tat androidx.fragment.app.FragmentManager.enqueueAction(FragmentManager.java:1729)\n\tat com.example.shop.orders.OrderDetailFragment.showReceipt(OrderDetailFragment.kt:74)\n\tat com.example.shop.orders.OrderDetailFragment$onOrderLoaded$1.invoke(OrderDetailFragment.kt:51)\"",
+      "files": [],
+      "setup": "The orders-lib repo is on disk with a clean tree. Its OrderDetailFragment.showReceipt already checks isStateSaved before committing, so a correct TC-001 passes on the unfixed code.",
+      "expected_output": "TC-001 is written and run before the fix; it passes, so the run returns to Step 4e once, still cannot make it fail, records reproduction_verified false, lowers confidence, and finishes as PARTIAL.",
+      "expected": {
+        "status": "PARTIAL",
+        "build.reproduction_verified": false,
+        "analysis.confidence_max": "MEDIUM"
+      },
+      "assertions": [
+        "TC-001 is executed before any production-code edit",
+        "Returns to Step 4e at most once",
+        "PR body and Open Questions state that reproduction was not verified"
+      ]
+    }
+  ]
+}

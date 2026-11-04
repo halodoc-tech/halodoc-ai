@@ -18,32 +18,37 @@ Keep each section short. The document is for a developer reviewing a fix, not a 
 
 ## Feature slug
 
-Generate it before anything is written. `{class}` is `{root_class}` lower-cased; `{id}` is
-the backend issue ID (shorten very long IDs to their first 12 characters if your git host
-limits branch-name length — the full ID still goes in the document and PR).
+Generate it in Step 4e, before anything is written or any branch is picked. `{class}` is the
+normalised `{simple_name}` from Step 4g, lower-cased (`CartViewModel$applyCoupon$1` →
+`cartviewmodel`); `{id}` is the backend issue ID (shorten very long IDs to their first 12
+characters if your git host limits branch-name length; the full ID still goes in the document,
+PR, and commit trailer). For pasted input, `{trace_hash}` is the 8-hex content hash from
+Step 2 Mode C.
 
 | Issue | Pattern | Example |
 |---|---|---|
 | Crash, from backend | `crash-fix-{class}-{id}` | `crash-fix-cartviewmodel-3f9a1c07e2b4` |
 | ANR, from backend | `anr-fix-{class}-{id}` | `anr-fix-feedrepository-7d20b8e4a6c1` |
-| Crash, pasted | `crash-fix-{class}-manual-{YYYYMMDD}` | `crash-fix-cartviewmodel-manual-20260115` |
-| ANR, pasted | `anr-fix-{class}-manual-{YYYYMMDD}` | `anr-fix-feedrepository-manual-20260115` |
+| Crash, pasted | `crash-fix-{class}-manual-{trace_hash}` | `crash-fix-cartviewmodel-manual-5e1f0a9c` |
+| ANR, pasted | `anr-fix-{class}-manual-{trace_hash}` | `anr-fix-feedrepository-manual-c40d7b21` |
 
-The same slug becomes the branch suffix in every repo (`{FIX_BRANCH_PREFIX}{feature-slug}`).
+**The slug is the idempotency key.** It depends only on the issue (and, for pasted input, the
+trace content), never on the date, the user, or what is already on disk. The same issue
+therefore always gets the same output directory and the same branch suffix in every repo
+(`{FIX_BRANCH_PREFIX}{feature-slug}`), which is what lets a re-run resume instead of
+duplicating (`version_cascade.md` section 4).
 
 ## Directory setup
 
-Two pasted traces for the same class on the same day would collide on one directory. Guard
-against it:
-
 ```bash
-BASE="{feature-slug}"; SLUG="$BASE"; i=2
-while [ -d "{workspace_root}/{OUTPUT_DIR}/$SLUG" ]; do SLUG="${BASE}-${i}"; i=$((i + 1)); done
-mkdir -p "{workspace_root}/{OUTPUT_DIR}/$SLUG"
+mkdir -p "{workspace_root}/{OUTPUT_DIR}/{feature-slug}"
 ```
 
-Use `$SLUG` for the rest of the run — output paths, `sprint_plan.json._meta.feature_slug`, and
-branch names.
+If the directory already exists it belongs to this same issue (a different issue or trace
+cannot produce the same slug): log `ℹ️ AUTO: output directory exists for this issue —
+overwriting artifacts` and overwrite the files. Never add a numeric suffix to the slug; that
+would fork new branches and a second set of PRs for the same fix. Never read the old files
+to steer the analysis (Guardrail 2).
 
 Save the document as
 `{workspace_root}/{OUTPUT_DIR}/{feature-slug}/CrashAnalysis_{ShortTitle}.md`, where
@@ -174,8 +179,8 @@ introduce a race on shared mutable state, or a use-after-teardown when the resul
 
 ## 9. Verification
 
-- Unit tests: TC-001 (reproduction — fails before the fix), TC-003 (regression); ANR tests
-  run under a test dispatcher
+- Unit tests: TC-001 (reproduction — run against the unfixed code first and seen to fail;
+  record the failure message), TC-003 (regression); ANR tests run under a test dispatcher
 - Manual: Section 3 steps, if reproducible
 - Log signal: {what to grep in logcat to confirm the fixed path runs}
 - Post-release: events for `{issue_id}` in the fixed versions should fall to zero
@@ -212,12 +217,14 @@ form at the end. Title: `[{ISSUE_TYPE}] {title}`.
 | **Regression risk** | {HIGH | MEDIUM | LOW} — {one line} |
 | **Release verdict** | {SAFE TO RELEASE | NEEDS FEATURE FLAG | NEEDS HOTFIX} |
 | **Test status** | {test_status} |
+| **Reproduction verified** | {`true` (TC-001 failed on the unfixed code) or `false` (see Root Cause)} |
 
 ## Root Cause
 [{issue_id}]({issue_uri}) — {impact_summary}
 
 {2–4 sentences: the trigger, the component at fault, the underlying condition. Opens with
-the confirmed one-sentence hypothesis. States confidence if not HIGH.}
+the confirmed one-sentence hypothesis. States confidence if not HIGH, and says so plainly
+when reproduction_verified is false.}
 
 ## Steps to Reproduce
 {numbered steps, or "Not deterministically reproducible — see analysis document"}
@@ -228,7 +235,8 @@ the confirmed one-sentence hypothesis. States confidence if not HIGH.}
 {## Breaking change — only if Step 4j applies}
 
 ## Test Cases / Passing Criteria
-1. TC-001 — {reproduction scenario} — fails without the fix, passes with it
+1. TC-001 — {reproduction scenario} — failed on the unfixed code ({exception or threading
+   assertion}), passes with the fix (or: "reproduction NOT verified — {why}")
 2. TC-002 — {edge case}
 3. TC-003 — {existing behaviour preserved}
 
