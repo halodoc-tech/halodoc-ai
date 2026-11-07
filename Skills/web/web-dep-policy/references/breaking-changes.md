@@ -10,19 +10,19 @@ anything not listed.
 Symptom when only eslint is bumped:
 ```
 TypeError: Class extends value undefined is not a constructor or null
-    at .../@typescript-eslint+utils@8.38.x.../FlatESLint.js
+    at .../@typescript-eslint+utils@<old>.../FlatESLint.js
 ```
 Immediate cause: that `@typescript-eslint/*` version extends eslint's removed
 `FlatESLint` shim and peers only `^8.57 || ^9`. Everything in the family must
-resolve to a version peering `^10` (≥ 8.59.4).
+resolve to a version peering `^10` (≥ <new>).
 
 **Root cause is STALE LOCKFILE RESIDUE, not a version conflict — and that
 determines the fix.** Nothing in the graph actually requires the old version:
 
 ```
-typescript-eslint@8.59.4                -> @typescript-eslint/utils: 8.59.4          EXACT
-@typescript-eslint/eslint-plugin@8.59.4 -> @typescript-eslint/utils: 8.59.4          EXACT
-@angular-eslint/eslint-plugin@21.4.0    -> @typescript-eslint/utils: ^7.11.0 || ^8.0.0   wide
+typescript-eslint@<new>                -> @typescript-eslint/utils: <new>          EXACT
+@typescript-eslint/eslint-plugin@<new> -> @typescript-eslint/utils: <new>          EXACT
+@angular-eslint/eslint-plugin@<ver>    -> @typescript-eslint/utils: ^7 || ^8   wide
 ```
 
 The `@typescript-eslint` monorepo pins its own internals EXACTLY, while
@@ -44,12 +44,12 @@ Consequences worth internalising:
 
 Fix (surgical — do NOT run bare `pnpm dedupe`, it garbage-collects unrelated
 duplicate entries fleet-wide and bloats the MR diff from ~1k to ~3k lines):
-1. `grep -n '@typescript-eslint/utils@' pnpm-lock.yaml` — find versions < 8.59.
+1. `grep -n '@typescript-eslint/utils@' pnpm-lock.yaml` — find versions < <new>.
 2. If a compatible version already exists in the lockfile (usual case): edit the
    lockfile — delete the old-version definition blocks (`packages:` and
    `snapshots:` sections) for the whole old `@typescript-eslint/*` family, then
-   rewrite the remaining references (both key-form `...@8.38.0(...)` and
-   value-form `'@typescript-eslint/utils': 8.38.0(...)`) to the new version.
+   rewrite the remaining references (both key-form `...@<old>(...)` and
+   value-form `'@typescript-eslint/utils': <old>(...)`) to the new version.
 3. Stale references appear in THREE forms and every one must be rewritten or the
    lockfile breaks with `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`:
    - the `'<pkg>@<old>':` definition block under `packages:`
@@ -78,7 +78,7 @@ on eslint 10 — warning only, lint still runs; note it, don't chase it).
 - package.json `"husky": { "hooks": ... }` config blocks (v4 leftovers, present
   in some repos) are ignored by v8+ anyway — delete them in passing.
 
-## ua-parser-js 1.x → 2.x  — VERIFIED (a website onboarding; 2.0.3 → 2.0.10 was patch)
+## ua-parser-js 1.x → 2.x  — VERIFIED (a website onboarding)
 
 - 2.x is ESM-first with an exports map: deep imports and
   `require('ua-parser-js/package.json')` fail (`ERR_PACKAGE_PATH_NOT_EXPORTED`).
@@ -94,7 +94,7 @@ on eslint 10 — warning only, lint still runs; note it, don't chase it).
   `GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()`
   (the `.js` worker paths from 2.x/4.x no longer exist).
 - 5.x is ESM-only with top-level await — Angular builds need the esbuild
-  builder (`@angular/build`), fine on ng19+; webpack-builder repos will choke.
+  builder (`@angular/build`), fine on recent Angular majors; webpack-builder repos will choke.
 - `ng2-pdf-viewer` / `ngx-extended-pdf-viewer` each pin their own compatible
   pdfjs-dist — bump the viewer to the policy version FIRST, and only align
   pdfjs-dist to what that viewer's peer range wants.
@@ -112,7 +112,7 @@ on eslint 10 — warning only, lint still runs; note it, don't chase it).
 
 ## ngx-quill / ngx-mask / ngx-device-detector / ngx-infinite-scroll
 
-These track the Angular major (that's why they live in the ng21/ng19 cluster
+These track the Angular major (that's why they live in the per-Angular-major cluster
 catalogs, not the global one). Rules:
 - Only convert them to `catalog:<cluster>` when the repo's `@angular/core` major
   matches the cluster. There is NO repo registry in `policy.json` — the guard

@@ -13,7 +13,7 @@ Onboards this repo to the centrally-governed dependency policy
    repos)* — pure format conversion via pnpm 9 with **zero resolution changes**
    (verified by diffing the resolved name@version set against master).
 2. **`feat: onboard to the central dependency version policy`**
-   - `packageManager: pnpm@10.34.5` (exact toolchain; CI provisioning derives
+   - `packageManager: pnpm@10.x.y` (exact toolchain; CI provisioning derives
      from it) + `engines.pnpm >=10.4.0` (configDependencies feature floor)
    - `pnpm-workspace.yaml` registers the policy config dependency (exact
      version + sha512; pnpm verifies the hash on every install)
@@ -31,10 +31,10 @@ Onboards this repo to the centrally-governed dependency policy
 
 ### Evidence — build #N green
 ```
-provisioning pnpm@10.34.5 (from package.json packageManager)
+provisioning pnpm@10.x.y (from package.json packageManager)
 pinned: <ver> | latest: <…> | rc: <…>
 PASS: policy pin valid for its channel, integrity verified.
-injected catalogs — default: N deps; ng21: N deps; ng19: N deps
+injected catalogs — default: N deps; ng<major>: N deps; …
 ```
 <test/lint status; note deploy stages correctly skip on feature branches>
 ```

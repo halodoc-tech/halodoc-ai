@@ -70,7 +70,7 @@ const classify = (cur, target) => {
 
 const stripNotes = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => !k.startsWith('$')));
 const GLOBAL = stripNotes(policy.catalog);
-const CLUSTERS = stripNotes(policy.catalogs); // { ng21: {...}, ng19: {...} }
+const CLUSTERS = stripNotes(policy.catalogs); // { ng<major>: {...}, ... }
 // NOTE: there is no cluster registry. A repo's cluster is DERIVED from its
 // @angular/core major (policy.json catalogs.$note; policy-core.ts currentAngularMajor).
 // The install-time guard only fails on a MISMATCH between the derived cluster and
@@ -178,8 +178,8 @@ const addRows = (catalogName, entries) => {
 addRows('default', GLOBAL);
 // Cluster deps are compared only against the repo's OWN cluster, derived from its
 // Angular major — the same rule the install-time guard applies.
-// Comparing against every cluster produces bogus MAJOR flags (e.g. an ng21 repo
-// "downgrading" to the ng19 catalog it will never reference).
+// Comparing against every cluster produces bogus MAJOR flags (e.g. an ng<newer> repo
+// "downgrading" to an ng<older> catalog it will never reference).
 const ownCluster = derivedCluster;
 if (ownCluster) addRows(ownCluster, stripNotes(CLUSTERS[ownCluster]));
 else if (Object.keys(CLUSTERS).length) {

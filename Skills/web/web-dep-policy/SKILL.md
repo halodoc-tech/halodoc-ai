@@ -13,8 +13,8 @@ The org governs shared dependency versions fleet-wide through one package:
 `projects/pnpm-plugin-dep-version-policy`, published ONLY via that repo's release
 pipeline to the private registry `https://npm.your-org.internal/`). Consuming repos
 declare it as a **pnpm 10 config dependency**; its auto-loaded pnpmfile injects
-version **catalogs** (a `default` catalog plus per-Angular-cluster catalogs like
-`ng21`/`ng19`), and apps replace hardcoded versions with `"catalog:"` pointers.
+version **catalogs** (a `default` catalog plus per-Angular-cluster catalogs, one per
+Angular major, named `ng<major>`), and apps replace hardcoded versions with `"catalog:"` pointers.
 A CI **Dependency Policy Gate** fails builds whose policy pin goes stale.
 
 Reference onboardings (what "done" looks like):
@@ -88,7 +88,7 @@ Y` prescribes.
    printed as `policy:` — it resolves, hash-verifies, and writes the exact
    `version+sha512` into pnpm-workspace.yaml in one shot:
    ```bash
-   npx -y pnpm@10.34.5 add --config @your-org/pnpm-plugin-dep-version-policy@<version-from-audit>
+   npx -y pnpm@10 add --config @your-org/pnpm-plugin-dep-version-policy@<version-from-audit>
    ```
    **BEFORE running it — normalise the pin location.** If package.json carries a
    `pnpm` section (a CVE override is the usual reason), move that WHOLE block to
@@ -123,8 +123,8 @@ Y` prescribes.
    OLD policy (the gate would catch it as STALE, but don't rely on that).
 3. Sync the lockfile and validate:
    ```bash
-   npx -y pnpm@10.34.5 install --lockfile-only
-   npx -y pnpm@10.34.5 install --frozen-lockfile
+   npx -y pnpm@10 install --lockfile-only
+   npx -y pnpm@10 install --frozen-lockfile
    ```
    The hook log must show the injected catalog counts. If the new policy moved
    none of this repo's referenced entries and the hook code is unchanged, the
@@ -184,12 +184,12 @@ dep by dep:
      so it is a separate MR to `your-org/dependency-version-policy`
      targeting `stage-release` — it blocks the onboarding until it publishes.
 - **Cluster deps** (the audit marks them): a repo may only reference the cluster
-  catalog for its own Angular major — **derived from `@angular/core`** (Angular 21
-  → `catalog:ng21`) — and the install-time guard hard-fails on a mismatch. There is
+  catalog for its own Angular major — **derived from `@angular/core`** (Angular `<major>`
+  → `catalog:ng<major>`) — and the install-time guard hard-fails on a mismatch. There is
   NO cluster registry anywhere: no repo list to join, no policy MR to raise. The
   guard computes `ng${currentAngularMajor()}` and compares; the only allowlist in
-  the policy is for `exceptionCatalogs`. Verified on an unregistered Angular-21
-  repo: pointing at `catalog:ng21` logs `coherent — Angular 21 (ng21), references
+  the policy is for `exceptionCatalogs`. Verified on an unregistered Angular-major
+  repo: pointing at `catalog:ng<major>` logs `coherent — Angular <major> (ng<major>), references
   match` and installs green. The one thing that CAN block you is the policy not
   carrying an entry for that dep in your cluster — then pnpm fails with
   `ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC` and it needs a policy MR to add it.
@@ -215,7 +215,7 @@ drifted conversion.
 ## Phase 3 — Apply the onboarding (one commit)
 
 1. **package.json**
-   - `"packageManager": "pnpm@10.34.5"` — the exact toolchain; CI derives its
+   - `"packageManager": "pnpm@10.x.y"` — the exact toolchain; CI derives its
      per-build pnpm provisioning from this field (no corepack needed on agents).
    - `"engines": { "pnpm": ">=10.4.0" }` — feature floor for configDependencies;
      older pnpm gets a clear refusal instead of a confusing failure.
@@ -229,7 +229,7 @@ drifted conversion.
    when one exists, `rc` only during bootstrap), so the command stays correct
    before and after the policy's stable GA:
    ```bash
-   npx -y pnpm@10.34.5 add --config @your-org/pnpm-plugin-dep-version-policy@<version-from-audit>
+   npx -y pnpm@10 add --config @your-org/pnpm-plugin-dep-version-policy@<version-from-audit>
    ```
    If package.json carries a `pnpm` section (`overrides` etc.), **move the whole
    block here BEFORE running the command** — do not leave it. With that section
@@ -241,7 +241,7 @@ drifted conversion.
    the default shared library). For any other job_type, port the gate stage (Phase 0.3).
 4. **Lockfile**:
    ```bash
-   npx -y pnpm@10.34.5 install --lockfile-only
+   npx -y pnpm@10 install --lockfile-only
    ```
    Heads-up: pnpm 10 eagerly resolves configDependencies on ANY pnpm command in
    the workspace — if this hangs or 404s, the registry isn't set for the
@@ -274,8 +274,8 @@ drifted conversion.
 ## Phase 4 — Validate locally, then in CI
 
 Local (all four must pass before pushing):
-1. `npx -y pnpm@10.34.5 install --frozen-lockfile` — green, and the hook log
-   line appears: `[versions] injected catalogs — default: N; ng21: N; ng19: N`.
+1. `npx -y pnpm@10 install --frozen-lockfile` — green, and the hook log
+   line appears: `[versions] injected catalogs — default: N; ng<major>: N; …`.
 2. Installed versions match policy: read `node_modules/<dep>/package.json`
    `version` for every converted dep (some packages block `require('<dep>/package.json')`
    via exports — read the file, don't require it).
@@ -292,7 +292,7 @@ CI:
 2. Watch the build: `Dependency Policy Gate` stage must print
    `pinned: <ver> | latest: … | rc: …` then `PASS: policy pin valid for its
    channel, integrity verified.` — followed by
-   `provisioning pnpm@10.34.5 (from package.json packageManager)`, the catalogs
+   `provisioning pnpm@10.x.y (from package.json packageManager)`, the catalogs
    hook log, and green tests. Deploy stages skip on feature branches — expected.
 3. If the gate FAILS with STALE: a newer policy was published since you ran the
    audit — re-run the audit, re-pin, regenerate the lockfile, push again. That
@@ -339,7 +339,7 @@ One dep per commit, build + test after each. For every approved major:
 
 - `angular-upgrade` skill — the Angular framework migration (code side). On a **major** it hands the
   cluster repoint back here: the repo's cluster is derived from `@angular/core`, so crossing a major
-  means repointing `catalog:ng19` → `catalog:ng21` and repinning (this skill).
+  means repointing `catalog:ng<old>` → `catalog:ng<new>` and repinning (this skill).
 - `your-org/dependency-version-policy` → `docs/angular-major-upgrade.md` — the policy-side
   playbook for standing up / retiring an `ngNN` cluster catalog (a prerequisite when a repo moves to
   an Angular major the fleet has not governed yet).
