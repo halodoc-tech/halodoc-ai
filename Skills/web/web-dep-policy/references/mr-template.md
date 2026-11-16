@@ -45,5 +45,3 @@ Notes for the author:
 - If onboarding needed a policy change first (e.g. a new `ngNN` cluster catalog for this repo's
   Angular major — cluster membership is derived from `@angular/core`, there is no registry to edit),
   link the `dependency-version-policy` MR here.
-- AI review bots re-post the same integrity/packageManager comments on every
-  push; answer once, resolve, and reference the earlier thread for repeats.

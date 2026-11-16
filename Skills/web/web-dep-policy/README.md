@@ -18,6 +18,16 @@ frontends — and keeps an already-onboarded app current.
   ngx-* majors) — see `references/breaking-changes.md`.
 - **Validates** against the CI Dependency Policy Gate.
 
+## Prerequisites
+
+This skill drives an **existing** policy setup — it does not create one. You need a
+published policy package (a pnpm config dependency) whose tarball carries a
+`policy.json` (`catalog`, `catalogs.ng<major>`, `exceptionCatalogs`; `$`-prefixed
+keys are notes), a pnpmfile that injects those catalogs and rejects literal versions
+for governed deps, and a CI stage that fails when a repo's pinned policy version is
+behind the newest published one. Without them, treat this skill as a reference design
+rather than running it as-is. See `SKILL.md` for the full contract.
+
 ## Usage
 
 Invoke the skill and point it at a repo you want to onboard or update. It runs

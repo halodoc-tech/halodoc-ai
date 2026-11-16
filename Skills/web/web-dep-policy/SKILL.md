@@ -17,12 +17,27 @@ version **catalogs** (a `default` catalog plus per-Angular-cluster catalogs, one
 Angular major, named `ng<major>`), and apps replace hardcoded versions with `"catalog:"` pointers.
 A CI **Dependency Policy Gate** fails builds whose policy pin goes stale.
 
-Reference onboardings (what "done" looks like):
-- a micro-app onboarding (the standard pnpm CI pipeline; governs the full eslint
-  toolchain + husky)
-- the policy repo itself (what a policy-content change looks like: catalog entries
-  + the spec assertions that pin the reasoning)
-- a website app onboarding (the Docker CI pipeline, includes a pnpm 8→10 migration)
+## Prerequisites — this skill drives an existing policy setup, it does not create one
+
+This skill onboards and updates consuming repos against policy infrastructure that
+**already exists**; it does not stand any of it up. You need:
+
+- **A published policy package** (a pnpm config dependency) whose tarball contains a
+  `policy.json`:
+  `{ "catalog": { "<dep>": "<exact version>" }, "catalogs": { "ng<major>": { … } }, "exceptionCatalogs": { … } }`
+  (keys starting with `$` are notes and are ignored).
+- **A pnpmfile** (shipped by that package) that injects those catalogs and rejects a
+  literal version for any governed dep.
+- **A CI stage** that fails a build when the repo's pinned policy version is older than
+  the newest published one.
+
+If you don't have these, use this skill as a reference design rather than running it as-is.
+
+What "done" looks like varies by repo shape — a micro-app on a standard pnpm CI
+pipeline, a website app whose Docker pipeline also needs a pnpm 8→10 migration, or
+a library that governs its own lint/test toolchain — but the end state is always the
+same: governed deps declared as `catalog:` pointers, the policy pinned by exact
+version + integrity hash, and a green CI Dependency Policy Gate.
 
 Work on a feature branch (`feat/dep-policy-onboard` for onboarding,
 `feat/dep-policy-update` for pin updates). Never publish the policy package from a
@@ -30,6 +45,9 @@ laptop; policy content changes are a separate MR to `your-org/dependency-version
 targeting `stage-release`.
 
 ## Mode selection — run the audit first, it tells you which flow applies
+
+Do **Phase 0 — Preflight** first (Node ≥ 20, the VPN/registry reachable, and the
+`@your-org` scope mapped to the private registry) — the audit needs all three.
 
 Run `node <skill-dir>/scripts/version-audit.mjs` from the repo root before
 anything else. It always fetches the **newest published policy** from the registry
@@ -108,8 +126,6 @@ Y` prescribes.
    transitively. Every `pnpm.*` key has a top-level home there — `overrides`,
    `packageExtensions`, `peerDependencyRules`, `patchedDependencies`,
    `onlyBuiltDependencies`, `allowedDeprecatedVersions`, `neverBuiltDependencies`.
-   Known cases needing this: a shared commons library (`form-data`), an MFE
-   (luxon), a website app.
    **AFTER running it**, confirm the pin landed in pnpm-workspace.yaml and that
    package.json has no `configDependencies`. Re-running `version-audit.mjs` is the
    cheapest check — it prints `pinLocation` and flags a conflict between the two.
@@ -119,7 +135,7 @@ Y` prescribes.
    Why the explicit version and not a dist-tag: the audit already resolved the
    correct channel (stable `latest` when one exists; `rc` only while no stable
    has been published). A bare/`@latest` add is only safe once a stable exists —
-   during the bootstrap era `latest` points at a historical rc and would pin an
+   if no stable is published yet, `latest` can point at an rc and would pin an
    OLD policy (the gate would catch it as STALE, but don't rely on that).
 3. Sync the lockfile and validate:
    ```bash
@@ -145,6 +161,12 @@ Y` prescribes.
 ## Phase 0 — Preflight (ONBOARD mode)
 
 1. Node ≥ 20 available; private registry reachable (VPN): `curl -s -o /dev/null -w '%{http_code}' https://npm.your-org.internal/` → 200.
+   Also confirm the `@your-org` scope is mapped to the private registry:
+   `npm config get @your-org:registry` must print it; if not,
+   `npm config set @your-org:registry https://npm.your-org.internal/`. pnpm 10
+   resolves configDependencies on every command, so this must be set before any
+   pnpm call — the audit passes `--registry` explicitly, so it can pass while a
+   later bare pnpm command hangs or 404s.
 2. Identify the repo's package manager era from `pnpm-lock.yaml` line 1:
    `lockfileVersion: '6.0'` = pnpm 8 (needs the two-step conversion in Phase 2);
    `'9.0'` = pnpm 9/10 (convert step not needed).
@@ -166,11 +188,10 @@ dep by dep:
 - **MAJOR** → STOP and surface it to the developer explicitly (list the dep,
   current → policy version, and what depends on it).
 
-  **There is no per-dep defer.** Older guidance said un-pointered deps are
-  "simply not governed yet" — that is FALSE against the shipped hook. Once the
-  config dependency is pinned, `localPinViolations` throws for ANY governed dep
-  the repo declares with a literal version, and `localPinMode` defaults to
-  `error`. The install fails outright, before the CI gate stage runs.
+  **There is no per-dep defer.** Once the config dependency is pinned,
+  `localPinViolations` throws for ANY governed dep the repo declares with a
+  literal version, and `localPinMode` defaults to `error`. The install fails
+  outright, before the CI gate stage runs.
   `ORG_POLICY_LOCAL_PIN=warn` is local-only ("the CI gate reads no env"), so
   it unblocks your laptop and nothing else. Onboarding is therefore all-or-nothing
   across the governed deps a repo declares. Three real options:
@@ -188,9 +209,8 @@ dep by dep:
   → `catalog:ng<major>`) — and the install-time guard hard-fails on a mismatch. There is
   NO cluster registry anywhere: no repo list to join, no policy MR to raise. The
   guard computes `ng${currentAngularMajor()}` and compares; the only allowlist in
-  the policy is for `exceptionCatalogs`. Verified on an unregistered Angular-major
-  repo: pointing at `catalog:ng<major>` logs `coherent — Angular <major> (ng<major>), references
-  match` and installs green. The one thing that CAN block you is the policy not
+  the policy is for `exceptionCatalogs`. Pointing at `catalog:ng<major>` for the
+  repo's own Angular major installs green with no registration step. The one thing that CAN block you is the policy not
   carrying an entry for that dep in your cluster — then pnpm fails with
   `ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC` and it needs a policy MR to add it.
   Global-only onboarding is always fine.
@@ -198,13 +218,13 @@ dep by dep:
 ## Phase 2 — pnpm 8 → 10 lockfile conversion (only if lockfileVersion 6.0)
 
 pnpm 10 CANNOT faithfully convert a v6 lockfile — it re-resolves hundreds of
-ranges (observed: ~200 packages drifted on a large website repo). pnpm 9
-converts v6 → v9 with **zero resolution changes**. So, as its own commit, BEFORE
+ranges. pnpm 9 converts v6 → v9 with **zero resolution changes**. So, as its own
+commit, BEFORE
 adding `engines`/`packageManager` (their floor blocks pnpm 9):
 
 ```bash
 npx -y pnpm@9 install --lockfile-only
-python3 <skill-dir>/scripts/lockfile-drift-check.py   # must print: 0 changes
+python3 <skill-dir>/scripts/lockfile-drift-check.py   # must print: "perfectly faithful — zero resolution drift."
 git add pnpm-lock.yaml
 git commit -m "chore: convert pnpm-lock.yaml to lockfileVersion 9.0 (pnpm 9/10 format)"
 ```
@@ -279,11 +299,14 @@ Local (all four must pass before pushing):
 2. Installed versions match policy: read `node_modules/<dep>/package.json`
    `version` for every converted dep (some packages block `require('<dep>/package.json')`
    via exports — read the file, don't require it).
-3. `python3 <skill-dir>/scripts/lockfile-drift-check.py` vs the pre-onboarding
-   commit — the ONLY version changes must be the governed bumps you approved.
-   Pure REMOVALS of orphaned duplicates are expected and fine (pnpm 10's peer
-   resolution stops auto-installing second copies for stale peers — e.g. an
-   entire webpack@4 subtree can vanish, correctly).
+3. `python3 <skill-dir>/scripts/lockfile-drift-check.py <pre-onboarding-sha>`
+   (e.g. the Phase 2 conversion commit, or `origin/master` for pnpm-9 repos — not
+   the default `HEAD`, which after the onboarding commit compares against itself) —
+   the ONLY version changes must be the governed bumps you approved. A non-zero exit
+   is expected here whenever versions moved; inspect the listed changes and confirm
+   they equal the approved governed bumps. Pure REMOVALS of orphaned duplicates are
+   expected and fine (pnpm 10's peer resolution stops auto-installing second copies
+   for stale peers — e.g. an entire webpack@4 subtree can vanish, correctly).
 4. Repo lint + (if fast enough) tests. If lint uses eslint and eslint is being
    governed, expect the `@typescript-eslint` coupling — see breaking-changes.md.
 
@@ -337,9 +360,8 @@ One dep per commit, build + test after each. For every approved major:
 
 ## See also
 
-- `angular-upgrade` skill — the Angular framework migration (code side). On a **major** it hands the
-  cluster repoint back here: the repo's cluster is derived from `@angular/core`, so crossing a major
-  means repointing `catalog:ng<old>` → `catalog:ng<new>` and repinning (this skill).
-- `your-org/dependency-version-policy` → `docs/angular-major-upgrade.md` — the policy-side
-  playbook for standing up / retiring an `ngNN` cluster catalog (a prerequisite when a repo moves to
-  an Angular major the fleet has not governed yet).
+- `angular-upgrade` skill — the Angular framework migration (code side). After an Angular
+  **major** upgrade, run this skill to repoint `catalog:ng<old>` → `catalog:ng<new>` and repin:
+  the repo's cluster is derived from `@angular/core`, so crossing a major needs the repoint.
+- Standing up or retiring an `ng<major>` cluster catalog is policy-side work — a policy-repo MR —
+  and is a prerequisite when a repo moves to an Angular major the fleet has not governed yet.

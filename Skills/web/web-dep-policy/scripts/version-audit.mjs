@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Version-bump audit: current repo versions vs the central dependency policy.
-// Run from the repo root. No dependencies beyond node >= 18 + npm + tar on PATH.
+// Run from the repo root. No dependencies beyond node >= 20 + npm + tar on PATH.
 //
 //   node version-audit.mjs [--registry https://npm.your-org.internal/] [--json]
 //
@@ -10,8 +10,8 @@
 // MAJOR bumps are flagged loudly — they need an explicit remediate-or-exception
 // decision before the dep is converted to a catalog: pointer.
 
-import { execSync } from 'node:child_process';
-import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, existsSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -24,28 +24,37 @@ const REGISTRY = argVal('--registry', 'https://npm.your-org.internal/');
 const AS_JSON = args.includes('--json');
 const PKG = '@your-org/pnpm-plugin-dep-version-policy';
 
-const sh = (cmd) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// Run a command with an explicit argv — no shell, so repo-controlled values
+// (e.g. a crafted pin string) can never be interpreted as shell syntax.
+const run = (cmd, argv) => execFileSync(cmd, argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
 // ── 1. Resolve the policy version + integrity (rc channel in bootstrap mode) ──
 let tags;
 try {
-  tags = JSON.parse(sh(`npm view ${PKG} dist-tags --json --registry ${REGISTRY}`));
+  tags = JSON.parse(run('npm', ['view', PKG, 'dist-tags', '--json', '--registry', REGISTRY]));
 } catch (e) {
   console.error(`Cannot reach ${REGISTRY} for ${PKG} — is the VPN up and the registry configured?`);
   process.exit(2);
 }
 const stableIsReal = tags.latest && !tags.latest.includes('-');
 const policyVersion = stableIsReal ? tags.latest : (tags.rc || tags.latest);
-const integrity = sh(`npm view ${PKG}@${policyVersion} dist.integrity --registry ${REGISTRY}`);
+let integrity;
+try {
+  integrity = run('npm', ['view', `${PKG}@${policyVersion}`, 'dist.integrity', '--registry', REGISTRY]);
+} catch (e) {
+  console.error(`Cannot read integrity for ${PKG}@${policyVersion} from ${REGISTRY}: ${String(e.message || e).split('\n')[0]}`);
+  process.exit(2);
+}
 const pinString = `${policyVersion}+${integrity}`;
 
 // ── 2. Pull policy.json out of a published tarball ──
 const fetchPolicyJson = (version) => {
   const tmp = mkdtempSync(join(tmpdir(), 'dep-policy-'));
   try {
-    sh(`npm pack ${PKG}@${version} --registry ${REGISTRY} --pack-destination ${tmp}`);
-    const tarball = sh(`ls ${tmp}/*.tgz`).split('\n')[0];
-    sh(`tar -xzf ${tarball} -C ${tmp}`);
+    run('npm', ['pack', `${PKG}@${version}`, '--registry', REGISTRY, '--pack-destination', tmp]);
+    const tgz = readdirSync(tmp).find((f) => f.endsWith('.tgz'));
+    if (!tgz) throw new Error(`npm pack produced no tarball for ${PKG}@${version}`);
+    run('tar', ['-xzf', join(tmp, tgz), '-C', tmp]);
     return JSON.parse(readFileSync(join(tmp, 'package', 'policy.json'), 'utf8'));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
@@ -78,7 +87,9 @@ const CLUSTERS = stripNotes(policy.catalogs); // { ng<major>: {...}, ... }
 // exceptionCatalogs, which is unrelated.
 
 // ── 3. Read the repo ──
-const pj = JSON.parse(readFileSync('package.json', 'utf8'));
+let pj;
+try { pj = JSON.parse(readFileSync('package.json', 'utf8')); }
+catch (e) { console.error(`Cannot read package.json in the current directory — run from the repo root. (${String(e.message || e).split('\n')[0]})`); process.exit(2); }
 const declared = { ...pj.dependencies, ...pj.devDependencies };
 const repoName = pj.name;
 
@@ -113,26 +124,42 @@ const pinConflict = !!(wsPin && pjPin && wsPin[1] !== pjPin[1]);
 // When the pin is stale, diff the PINNED policy against the LATEST one: these
 // are the version movements the update will pull in — majors here need the
 // same remediate-or-exception decision as onboarding-time majors.
+const SEP = '\u0000'; // NUL — can't occur in a dep or catalog name, so it round-trips through split()
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 let policyDelta = [];
+let policyDeltaError = null;
 if (pinStale) {
   let oldPolicy = null;
-  try { oldPolicy = fetchPolicyJson(pinnedVersion); } catch { /* pinned version may be unpublished */ }
+  if (!SEMVER.test(String(pinnedVersion))) {
+    policyDeltaError = `pinned version "${pinnedVersion}" is not a plain semver — refusing to fetch it`;
+  } else {
+    try {
+      oldPolicy = fetchPolicyJson(pinnedVersion);
+    } catch (e) {
+      policyDeltaError = `could not fetch pinned policy ${pinnedVersion} (${String(e.message || e).split('\n')[0]})`;
+    }
+  }
   if (oldPolicy) {
     const flat = (p) => {
       const out = {};
-      for (const [d, v] of Object.entries(stripNotes(p.catalog))) out[`${d}default`] = v;
+      for (const [d, v] of Object.entries(stripNotes(p.catalog))) out[`${d}${SEP}default`] = v;
       for (const [c, entries] of Object.entries(stripNotes(p.catalogs)))
-        for (const [d, v] of Object.entries(stripNotes(entries))) out[`${d}${c}`] = v;
+        for (const [d, v] of Object.entries(stripNotes(entries))) out[`${d}${SEP}${c}`] = v;
       return out;
     };
     const a = flat(oldPolicy), b = flat(policy);
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
       if (a[key] === b[key]) continue;
-      const [dep, catalogName] = key.split('');
+      const [dep, catalogName] = key.split(SEP);
+      const spec = String(declared[dep] || '');
+      const referencedByRepo = spec.startsWith('catalog:');
+      // A dep the new policy ADDS that this repo still declares as a LITERAL
+      // becomes a hard install failure — flag it as loudly as a referenced major.
+      const literalNowGoverned = !!b[key] && !a[key] && !!spec && !referencedByRepo;
       policyDelta.push({
         dep, catalog: catalogName, from: a[key] || null, to: b[key] || null,
         bump: a[key] && b[key] ? classify(a[key], b[key]) : (b[key] ? 'ADDED' : 'REMOVED'),
-        referencedByRepo: String(declared[dep] || '').startsWith('catalog:'),
+        referencedByRepo, literalNowGoverned,
       });
     }
   }
@@ -205,6 +232,7 @@ const result = {
   pinConflict,
   pinStatus: onboarded ? (pinStale ? 'STALE' : 'CURRENT') : 'NOT ONBOARDED',
   policyDelta,
+  policyDeltaError,
   angularMajor: ngMajor,
   derivedCluster,
   clusterDepsPresent: rows.some((r) => r.catalog !== 'default'),
@@ -224,12 +252,16 @@ if (!onboarded) {
   if (policyDelta.length) {
     console.log(`policy changes between ${pinnedVersion} and ${policyVersion} (an update pulls these in):`);
     for (const d of policyDelta) {
-      const mark = d.referencedByRepo ? ' <-- referenced by this repo via catalog:' : '';
+      const mark = d.referencedByRepo ? ' <-- referenced by this repo via catalog:'
+        : d.literalNowGoverned ? ' <-- declared LITERALLY here: convert to catalog: in the pin-bump commit or the install fails'
+        : '';
       const flag = String(d.bump).startsWith('MAJOR') && d.referencedByRepo ? ' FLAG: remediate it, or record an exceptionCatalogs entry — there is no per-dep defer' : '';
       console.log(`  ${d.dep} [${d.catalog}]: ${d.from ?? '(absent)'} -> ${d.to ?? '(removed)'}  ${d.bump}${mark}${flag}`);
     }
+  } else if (policyDeltaError) {
+    console.log(`!! ${policyDeltaError} — delta UNKNOWN. Review the policy changelog between ${pinnedVersion} and ${policyVersion} before bumping; do NOT treat this as a clean pin+checksum bump.`);
   } else {
-    console.log(`no governed-version changes between ${pinnedVersion} and ${policyVersion} (or the pinned version's tarball is gone) — the update is a pin+checksum bump only.`);
+    console.log(`no governed-version changes between ${pinnedVersion} and ${policyVersion} — the update is a pin+checksum bump only.`);
   }
 } else {
   console.log(`mode: UPDATE — pin is CURRENT (${pinnedVersion}); nothing to bump.`);
@@ -261,6 +293,8 @@ console.log(`\nsummary: ${rows.length} governed dep(s) present — ${majors} MAJ
   `${rows.filter((r) => r.bump.startsWith('MINOR')).length} minor, ${rows.filter((r) => r.bump.startsWith('PATCH')).length} patch, ` +
   `${rows.filter((r) => r.bump === 'SAME').length} same, ${rows.filter((r) => r.bump === 'ALREADY ONBOARDED').length} already onboarded, ${rows.filter((r) => r.bump.startsWith('MISMATCH')).length} onboarded-but-MISMATCHED.`);
 const deltaMajors = policyDelta.filter((d) => String(d.bump).startsWith('MAJOR') && d.referencedByRepo).length;
+const deltaLiterals = policyDelta.filter((d) => d.literalNowGoverned).length;
 const mismatches = rows.filter((r) => r.bump.startsWith('MISMATCH')).length;
 if (mismatches) console.log(`!! ${mismatches} onboarded dep(s) resolve OFF-POLICY — fix before trusting the catalog pointers.`);
-if (majors || deltaMajors || mismatches) process.exitCode = 1; // scriptable signal: needs a human decision
+if (deltaLiterals) console.log(`!! ${deltaLiterals} newly-governed dep(s) are declared with a literal version — convert each to catalog: in the pin-bump commit or the install fails.`);
+if (majors || deltaMajors || deltaLiterals || mismatches || policyDeltaError) process.exitCode = 1; // scriptable signal: needs a human decision

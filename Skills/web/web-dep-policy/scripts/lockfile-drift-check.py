@@ -35,9 +35,12 @@ def resolved(text: str) -> dict:
     return out
 
 
-old_text = subprocess.run(
+_show = subprocess.run(
     ["git", "show", f"{REF}:pnpm-lock.yaml"], capture_output=True, text=True
-).stdout
+)
+if _show.returncode != 0:
+    sys.exit(f"cannot read pnpm-lock.yaml at {REF}: {_show.stderr.strip()}")
+old_text = _show.stdout
 try:
     new_text = open("pnpm-lock.yaml").read()
 except FileNotFoundError:
