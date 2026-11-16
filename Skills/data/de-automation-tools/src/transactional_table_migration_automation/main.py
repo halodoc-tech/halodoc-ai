@@ -132,8 +132,8 @@ def create_query(env, execution_method, schema_name, src_db_name, tgt_dbname, ta
             20,
             frequency_in_mins,
             job_group,
-            "Y",
-            "Y"
+            "N",  # clustering_enabled
+            "Y"   # enable_hudi_index
         )
         values.append(value)
         print("type of value", type(value))
